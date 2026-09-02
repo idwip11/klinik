@@ -1,0 +1,9 @@
+.env
+.DS_Store
+/.artifact-runtime/
+/*.zip
+/*.sql
+/*.sql.gz
+/storage/logs/*.log
+/storage/uploads/*
+!/storage/uploads/.gitkeep
