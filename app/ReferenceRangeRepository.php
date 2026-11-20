@@ -28,7 +28,8 @@ final class ReferenceRangeRepository
                 $catalog[(string) $parameter['code']] = [
                     'field' => $parameter['legacy_field'],
                     'label' => (string) $parameter['label'],
-                    'section' => $panel['code'] === 'urinalysis_complete' ? 'urine' : 'blood',
+                    'section' => $panel['code'] === 'urinalysis_complete' || str_starts_with((string) $parameter['code'], 'ANC_URINE_') ? 'urine' : 'blood',
+                    'required_sex' => $panel['required_sex'] ?? null,
                     'kind' => $parameter['result_type'] === 'numeric' ? 'numeric' : 'qualitative',
                     'unit' => $parameter['unit'],
                     'panel_name' => (string) $panel['name'],
@@ -115,6 +116,9 @@ final class ReferenceRangeRepository
         $sex = $population === 'CHILD' ? 'ALL' : $population;
         if (!in_array($sex, ['ALL', 'L', 'P'], true)) {
             throw new ValidationException(['form' => 'Jenis kelamin sasaran tidak valid.']);
+        }
+        if (!empty($catalog['required_sex']) && $sex !== $catalog['required_sex']) {
+            throw new ValidationException(['form' => 'Nilai normal panel ANC ibu hamil harus khusus perempuan.']);
         }
         $usesAgeYears = array_key_exists('min_age_years', $input) || array_key_exists('max_age_years', $input);
         $minAgeDays = $usesAgeYears

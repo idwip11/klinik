@@ -16,6 +16,7 @@
     <article class="form-section">
         <h2>Hasil abnormal</h2>
         <p>Nilai abnormal adalah hasil yang berada di luar nilai rujukan aktif yang cocok. Hasil tanpa rujukan atau yang tidak dapat diinterpretasi masuk kategori belum dinilai, bukan normal. Ringkasan ini bukan diagnosis.</p>
+        <p>ANC ibu hamil memakai rujukan khusus perempuan. Golongan darah dan Rhesus dicatat tanpa penilaian normal/abnormal, sehingga tidak dianggap sebagai hasil yang kekurangan nilai rujukan.</p>
     </article>
     <article class="form-section">
         <h2>Asuransi / penjamin</h2>
@@ -24,6 +25,7 @@
     <article class="form-section">
         <h2>Kualitas data</h2>
         <p>Indikator draft, identitas kosong, panel belum lengkap, dan hasil tanpa rujukan hanya bersifat informasi. Perbaikan data dilakukan dari halaman pasien, pemeriksaan, atau nilai rujukan terkait.</p>
+        <p>Panel otomatis seperti Widal yang seluruh hasilnya masih kosong tidak dihitung sebagai panel belum lengkap. Jika hasilnya mulai diisi, kelengkapannya ikut dihitung.</p>
     </article>
     <article class="form-section">
         <h2>Ekspor agregat</h2>

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 final class ExaminationRepository
 {
+    public const DATA_RETENTION_START = '2026-01-01';
+
     public static function nowInWib(): DateTimeImmutable
     {
         return new DateTimeImmutable('now', new DateTimeZone('Asia/Jakarta'));
@@ -11,9 +13,7 @@ final class ExaminationRepository
 
     public static function suggestLabNumber(string $examinedOn): string
     {
-        if (!self::validDate($examinedOn)) {
-            throw new ValidationException(['examined_on' => 'Tanggal periksa tidak valid.']);
-        }
+        self::assertRetainedExamDate($examinedOn);
 
         return self::formatLabNumber($examinedOn, self::nextSequenceFromExisting(Database::connection(), $examinedOn));
     }
@@ -21,7 +21,7 @@ final class ExaminationRepository
     public static function find(int $id): array|false
     {
         $statement = Database::connection()->prepare(
-            'SELECT e.*, p.medical_record_number, p.national_id, p.full_name, p.birth_place, p.birth_date, p.sex, p.address, p.phone,
+            'SELECT e.*, p.medical_record_number, p.national_id, p.full_name, p.birth_place, p.birth_date, p.sex, p.address, p.phone, p.insurance_type,
                     v.blood_pressure_systolic, v.blood_pressure_diastolic, v.height_cm, v.weight_kg, v.respiratory_rate, v.color_vision,
                     v.pulse_rate, v.blood_group, v.rhesus, v.temperature_c,
                     b.hgb, b.wbc, b.plt, b.rbc, b.hct, b.lymph_pct, b.mid_pct, b.gran_pct, b.mcv, b.mch, b.mchc,
@@ -41,9 +41,13 @@ final class ExaminationRepository
              LEFT JOIN drug_results d ON d.examination_id = e.id
              LEFT JOIN widal_results w ON w.examination_id = e.id
              WHERE e.id = :id
+               AND e.examined_on >= :retention_start
              LIMIT 1'
         );
-        $statement->execute(['id' => $id]);
+        $statement->execute([
+            'id' => $id,
+            'retention_start' => self::DATA_RETENTION_START,
+        ]);
 
         return $statement->fetch();
     }
@@ -70,16 +74,15 @@ final class ExaminationRepository
         if (mb_strlen($labNumber) > 50) {
             throw new ValidationException(['lab_number' => 'Nomor lab terlalu panjang.']);
         }
-        if (!self::validDate($examinedOn)) {
-            throw new ValidationException(['examined_on' => 'Tanggal periksa tidak valid.']);
-        }
+        self::assertRetainedExamDate($examinedOn);
         if (!ExaminationType::isValid($examinationType)) {
             throw new ValidationException(['examination_type' => 'Jenis pemeriksaan tidak valid.']);
         }
         $pdo = Database::connection();
-        $examinedTime = self::nowInWib()->format('H:i:s');
+        $examinedTime = self::time($input['examined_time'] ?? null);
+        $room = self::requiredText($input['room'] ?? null, 'Ruangan', 100);
         $panelSelections = $examinationType === 'mcu_general'
-            ? ExaminationPanelCatalogRepository::selectionFromInput($input['panel_codes'] ?? [], $pdo)
+            ? ExaminationPanelCatalogRepository::selectionFromInput($input['panel_codes'] ?? [], $pdo, $patient['sex'] ?? null)
             : [];
 
         try {
@@ -89,20 +92,21 @@ final class ExaminationRepository
             }
             $statement = $pdo->prepare(
                 'INSERT INTO examinations
-                    (patient_id, lab_number, examination_type, status, examined_on, examined_time, condition_note, purpose, letter_number, room, created_by, updated_by, created_at, updated_at)
+                    (patient_id, lab_number, examination_type, status, examined_on, result_date, examined_time, condition_note, purpose, letter_number, room, created_by, updated_by, created_at, updated_at)
                  VALUES
-                    (:patient_id, :lab_number, :examination_type, "draft", :examined_on, :examined_time, :condition_note, :purpose, :letter_number, :room, :created_by, :updated_by, UTC_TIMESTAMP(), UTC_TIMESTAMP())'
+                    (:patient_id, :lab_number, :examination_type, "draft", :examined_on, :result_date, :examined_time, :condition_note, :purpose, :letter_number, :room, :created_by, :updated_by, UTC_TIMESTAMP(), UTC_TIMESTAMP())'
             );
             $statement->execute([
                 'patient_id' => (int) $patientId,
                 'lab_number' => $labNumber,
                 'examination_type' => $examinationType,
                 'examined_on' => $examinedOn,
+                'result_date' => $examinedOn,
                 'examined_time' => $examinedTime,
                 'condition_note' => self::nullableText($input['condition_note'] ?? null, 500),
                 'purpose' => self::nullableText($input['purpose'] ?? null, 255),
                 'letter_number' => self::nullableText($input['letter_number'] ?? null, 100),
-                'room' => self::nullableText($input['room'] ?? null, 100),
+                'room' => $room,
                 'created_by' => $userId,
                 'updated_by' => $userId,
             ]);
@@ -132,6 +136,125 @@ final class ExaminationRepository
         ]);
 
         return $id;
+    }
+
+    public static function updateDocumentDates(int $id, string $examinedOn, string $resultDate, int $userId): void
+    {
+        $examinedOn = trim($examinedOn);
+        $resultDate = trim($resultDate);
+        self::assertRetainedExamDate($examinedOn);
+        if (!self::validDate($resultDate)) {
+            throw new ValidationException(['result_date' => 'Tanggal hasil tidak valid.']);
+        }
+        if ($resultDate < $examinedOn) {
+            throw new ValidationException(['result_date' => 'Tanggal hasil tidak boleh lebih awal dari tanggal periksa.']);
+        }
+        $pdo = Database::connection();
+        $pdo->beginTransaction();
+        try {
+            $statement = $pdo->prepare(
+                'SELECT *
+                 FROM examinations
+                 WHERE id = :id
+                   AND examined_on >= :retention_start
+                 FOR UPDATE'
+            );
+            $statement->execute(['id' => $id, 'retention_start' => self::DATA_RETENTION_START]);
+            $before = $statement->fetch();
+            if ($before === false) {
+                throw new ValidationException(['form' => 'Pemeriksaan tidak ditemukan.']);
+            }
+
+            $pdo->prepare(
+                'UPDATE examinations
+                 SET examined_on = :examined_on, result_date = :result_date,
+                     updated_by = :updated_by, updated_at = UTC_TIMESTAMP()
+                 WHERE id = :id'
+            )->execute([
+                'examined_on' => $examinedOn,
+                'result_date' => $resultDate,
+                'updated_by' => $userId,
+                'id' => $id,
+            ]);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+
+        AuditLogger::record('examination.document_dates_updated', $userId, 'examination', $id, [
+            'examined_on' => $before['examined_on'],
+            'result_date' => $before['result_date'] ?? null,
+        ], [
+            'examined_on' => $examinedOn,
+            'result_date' => $resultDate,
+        ]);
+    }
+
+    public static function deleteExamination(int $id, string $confirmationLabNumber, int $userId): int
+    {
+        $pdo = Database::connection();
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) {
+            $pdo->beginTransaction();
+        }
+
+        try {
+            $statement = $pdo->prepare(
+                'SELECT *
+                 FROM examinations
+                 WHERE id = :id
+                   AND examined_on >= :retention_start
+                 FOR UPDATE'
+            );
+            $statement->execute([
+                'id' => $id,
+                'retention_start' => self::DATA_RETENTION_START,
+            ]);
+            $before = $statement->fetch();
+            if ($before === false) {
+                throw new ValidationException(['form' => 'Pemeriksaan tidak ditemukan.']);
+            }
+
+            $confirmationLabNumber = trim($confirmationLabNumber);
+            if ($confirmationLabNumber === '' || !hash_equals((string) $before['lab_number'], $confirmationLabNumber)) {
+                throw new ValidationException(['confirm_lab_number' => 'Konfirmasi nomor lab tidak sesuai.']);
+            }
+
+            foreach ([
+                'vital_results',
+                'blood_results',
+                'urine_results',
+                'drug_results',
+                'widal_results',
+                'examination_panel_selections',
+                'examination_parameter_results',
+                'examination_result_flags',
+                'print_logs',
+            ] as $table) {
+                $pdo->prepare('DELETE FROM ' . $table . ' WHERE examination_id = :examination_id')
+                    ->execute(['examination_id' => $id]);
+            }
+
+            $pdo->prepare('DELETE FROM examinations WHERE id = :id')->execute(['id' => $id]);
+            $pdo->prepare('DELETE FROM lab_number_sequences WHERE examined_on = :examined_on')
+                ->execute(['examined_on' => $before['examined_on']]);
+
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+        } catch (Throwable $exception) {
+            if ($ownsTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+
+        AuditLogger::record('examination.deleted_permanently', $userId, 'examination', $id, $before, null);
+
+        return (int) $before['patient_id'];
     }
 
     private static function reserveNextSequence(PDO $pdo, string $examinedOn): int
@@ -164,7 +287,7 @@ final class ExaminationRepository
 
     private static function nextSequenceFromExisting(PDO $pdo, string $examinedOn): int
     {
-        $prefix = str_replace('-', '', $examinedOn);
+        $prefix = self::labDatePrefix($examinedOn);
         $statement = $pdo->prepare('SELECT lab_number FROM examinations WHERE lab_number LIKE :prefix');
         $statement->execute(['prefix' => $prefix . '%']);
 
@@ -184,7 +307,27 @@ final class ExaminationRepository
             throw new ValidationException(['lab_number' => 'Nomor urut laboratorium untuk tanggal ini sudah mencapai batas 9999.']);
         }
 
-        return str_replace('-', '', $examinedOn) . str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
+        return self::labDatePrefix($examinedOn) . str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
+    }
+
+    private static function labDatePrefix(string $examinedOn): string
+    {
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $examinedOn);
+        if ($date === false || $date->format('Y-m-d') !== $examinedOn) {
+            throw new ValidationException(['examined_on' => 'Tanggal periksa tidak valid.']);
+        }
+
+        return $date->format('ymd');
+    }
+
+    private static function assertRetainedExamDate(string $examinedOn): void
+    {
+        if (!self::validDate($examinedOn)) {
+            throw new ValidationException(['examined_on' => 'Tanggal periksa tidak valid.']);
+        }
+        if ($examinedOn < self::DATA_RETENTION_START) {
+            throw new ValidationException(['examined_on' => 'Tanggal periksa harus 01/01/2026 atau setelahnya.']);
+        }
     }
 
     /** @param array<string, mixed> $input */
@@ -198,6 +341,7 @@ final class ExaminationRepository
             ? ExaminationPanelCatalogRepository::formForExamination($id)
             : [];
         if ($panelForm !== []) {
+            ExaminationPanelCatalogRepository::assertPatientSex($panelForm, $examination['sex'] ?? null);
             self::savePanelResults($id, $input, $userId, $panelForm);
             return;
         }
@@ -435,6 +579,19 @@ final class ExaminationRepository
         return $value;
     }
 
+    private static function requiredText(mixed $value, string $label, int $maxLength): string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            throw new ValidationException(['room' => $label . ' wajib diisi.']);
+        }
+        if (mb_strlen($value) > $maxLength) {
+            throw new ValidationException(['room' => $label . ' terlalu panjang.']);
+        }
+
+        return $value;
+    }
+
     private static function decimal(mixed $value, string $label, float $maximum, int $scale): ?string
     {
         $value = trim((string) $value);
@@ -472,5 +629,16 @@ final class ExaminationRepository
         $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
 
         return $date !== false && $date->format('Y-m-d') === $value;
+    }
+
+    private static function time(mixed $value): string
+    {
+        $value = trim((string) $value);
+        $time = DateTimeImmutable::createFromFormat('!H:i', $value);
+        if ($value === '' || $time === false || $time->format('H:i') !== $value) {
+            throw new ValidationException(['examined_time' => 'Jam periksa harus menggunakan format HH:MM.']);
+        }
+
+        return $time->format('H:i:s');
     }
 }

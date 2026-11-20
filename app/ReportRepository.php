@@ -13,7 +13,7 @@ final class ReportRepository
         $statement = Database::connection()->prepare($sql . ' ORDER BY e.examined_on DESC, e.id DESC LIMIT ' . $limit . ' OFFSET ' . $offset);
         $statement->execute($parameters);
 
-        return $statement->fetchAll();
+        return self::withPanelResults($statement->fetchAll());
     }
 
     /** @param array<string, mixed> $filters @return array{total: int, draft: int, completed: int, finalized: int} */
@@ -43,12 +43,14 @@ final class ReportRepository
         header('Content-Disposition: attachment; filename="rekap-pemeriksaan-' . date('Y-m-d') . '.csv"');
         $output = fopen('php://output', 'wb');
         fwrite($output, "\xEF\xBB\xBF");
-        fputcsv($output, ['No. Lab', 'Tanggal Periksa', 'Jenis Pemeriksaan', 'Status', 'No. RM', 'Nama', 'Asuransi', 'NIK', 'Jenis Kelamin', 'Nomor Surat']);
-        while ($row = $statement->fetch()) {
+        fputcsv($output, ['No. Lab', 'Tanggal Periksa', 'Jenis Pemeriksaan', 'Status', 'No. RM', 'Nama', 'Asuransi', 'NIK', 'Jenis Kelamin', 'Nomor Surat', 'Panel pemeriksaan', 'Hasil panel'], ',', '"', '');
+        foreach (self::withPanelResults($statement->fetchAll()) as $row) {
             fputcsv($output, array_map([self::class, 'safeCsv'], [
                 $row['lab_number'], $row['examined_on'], self::typeLabel((string) $row['examination_type']), self::statusLabel((string) $row['status']),
                 $row['medical_record_number'], $row['full_name'], $row['insurance_type'], $row['national_id'], $row['sex'], $row['letter_number'],
-            ]));
+                implode('; ', array_column($row['panels'], 'name')),
+                implode('; ', array_map(static fn (array $result): string => $result['panel_name'] . ' / ' . $result['label'] . ': ' . ($result['numeric'] ? View::formatNumber($result['value']) : $result['value']), $row['panel_results'])),
+            ]), ',', '"', '');
         }
         fclose($output);
     }
@@ -74,7 +76,81 @@ final class ReportRepository
         [$sql, $parameters] = self::query($filters, $select, $joins);
         $statement = Database::connection()->prepare($sql . ' ORDER BY e.examined_on DESC, e.id DESC');
         $statement->execute($parameters);
-        ReportExcelExporter::download($statement->fetchAll());
+        ReportExcelExporter::download(self::withPanelResults($statement->fetchAll()));
+    }
+
+    /** @param list<array<string,mixed>> $records @return list<array<string,mixed>> */
+    private static function withPanelResults(array $records): array
+    {
+        if ($records === []) return [];
+        $pdo = Database::connection();
+        $ids = implode(', ', array_map(static fn (array $record): int => (int) $record['id'], $records));
+        $selected = [];
+        foreach ($pdo->query(
+            'SELECT s.examination_id, p.code, p.name, s.is_auto_included
+             FROM examination_panel_selections s
+             INNER JOIN examination_panels p ON p.id = s.panel_id
+             WHERE s.examination_id IN (' . $ids . ') ORDER BY p.display_order, p.id'
+        ) as $row) {
+            $selected[(int) $row['examination_id']][$row['code']] = [
+                'code' => $row['code'], 'name' => $row['name'], 'is_auto_included' => (bool) $row['is_auto_included'],
+            ];
+        }
+        $results = [];
+        $metadata = [];
+        foreach ($pdo->query(
+            'SELECT r.examination_id, r.parameter_code_snapshot AS code, r.parameter_label_snapshot AS label,
+                    r.value_numeric, r.value_text, r.unit_snapshot AS unit, p.code AS panel_code, p.name AS panel_name
+             FROM examination_parameter_results r
+             LEFT JOIN test_parameters tp ON tp.id = r.parameter_id
+             LEFT JOIN examination_panels p ON p.id = tp.panel_id
+             WHERE r.examination_id IN (' . $ids . ')
+               AND (r.value_numeric IS NOT NULL OR NULLIF(TRIM(r.value_text), "") IS NOT NULL)
+             ORDER BY p.display_order, tp.display_order, r.id'
+        ) as $row) {
+            $id = (int) $row['examination_id'];
+            $code = (string) $row['code'];
+            $numeric = $row['value_numeric'] !== null;
+            $results[$id][$code] = [
+                'value' => trim((string) ($numeric ? $row['value_numeric'] : $row['value_text'])),
+                'numeric' => $numeric, 'unit' => $row['unit'],
+            ];
+            $metadata[$id][$code] = ['code' => $code, 'label' => $row['label'], 'panel_code' => $row['panel_code'] ?? 'other', 'panel_name' => $row['panel_name'] ?? 'Pemeriksaan lainnya'];
+        }
+        // Older Widal results may only exist in the compatibility table.
+        foreach ($records as $record) {
+            $id = (int) $record['id'];
+            foreach (WidalResultOptions::FIELDS as $code => $field) {
+                if (isset($results[$id][$code]) || trim((string) ($record[$field] ?? '')) === '') continue;
+                $results[$id][$code] = ['value' => trim((string) $record[$field]), 'numeric' => false, 'unit' => null];
+                $metadata[$id][$code] = ['code' => $code, 'label' => 'Salmonella typhi ' . substr($code, 6), 'panel_code' => 'widal', 'panel_name' => 'Widal / Pemeriksaan Terkait Demam Tifoid'];
+            }
+        }
+        $results = HistoricalReferenceEvaluator::annotatePopulation($pdo, $records, $results);
+        foreach ($records as &$record) {
+            $id = (int) $record['id'];
+            $record['panel_results'] = [];
+            foreach ($results[$id] ?? [] as $code => $result) {
+                $info = $metadata[$id][$code];
+                $record['panel_results'][] = array_merge($info, $result);
+                $selected[$id][$info['panel_code']] ??= ['code' => $info['panel_code'], 'name' => $info['panel_name'], 'is_auto_included' => false];
+            }
+            $record['panels'] = array_values($selected[$id] ?? []);
+            // Include the ANC measurements in the familiar summary columns as well.
+            if (($record['hgb'] ?? null) === null && isset($results[$id]['ANC_HGB'])) {
+                $record['hgb'] = $results[$id]['ANC_HGB']['value'];
+            }
+            if (($record['gds'] ?? null) === null && isset($results[$id]['ANC_GDS'])) {
+                $record['gds'] = $results[$id]['ANC_GDS']['value'];
+            }
+            if (empty($record['blood_group']) && isset($results[$id]['ANC_BLOOD_GROUP'])
+                && preg_match('/^(A|B|AB|O) \/ Rh \(([+-])\)$/', $results[$id]['ANC_BLOOD_GROUP']['value'], $match)) {
+                $record['blood_group'] = $match[1];
+                $record['rhesus'] = $match[2];
+            }
+        }
+        unset($record);
+        return $records;
     }
 
     /** @param array<string, mixed> $filters @return array{0: string, 1: array<string, mixed>} */
@@ -83,15 +159,16 @@ final class ReportRepository
         string $select = 'e.id, e.patient_id, e.lab_number, e.examination_type, e.status, e.examined_on, e.examined_time, e.condition_note, e.purpose, e.letter_number,
                           p.medical_record_number, p.national_id, p.full_name, p.birth_place, p.birth_date, p.sex, p.address, p.insurance_type,
                           v.blood_group, v.rhesus,
-                          b.hgb, b.wbc, b.plt, b.rbc, b.hct, b.gds, b.cholesterol, b.uric_acid, b.sgot, b.sgpt',
+                          b.hgb, b.wbc, b.plt, b.rbc, b.hct, b.gds, b.cholesterol, b.uric_acid, b.sgot, b.sgpt,
+                          w.widal_o, w.widal_ao, w.widal_bo, w.widal_h',
         string $joins = ' LEFT JOIN vital_results v ON v.examination_id = e.id
-                          LEFT JOIN blood_results b ON b.examination_id = e.id'
+                          LEFT JOIN blood_results b ON b.examination_id = e.id
+                          LEFT JOIN widal_results w ON w.examination_id = e.id'
     ): array
     {
-        // Rekap operasional hanya menampilkan pasien aktif. Riwayat pasien
-        // yang sudah diarsipkan tetap tersedia dari menu Arsip pasien.
-        $clauses = ['1 = 1', 'p.archived_at IS NULL'];
-        $parameters = [];
+        // Rekap operasional hanya menggunakan pemeriksaan mulai tahun 2026.
+        $clauses = ['1 = 1', 'p.archived_at IS NULL', 'e.examined_on >= :retention_start'];
+        $parameters = ['retention_start' => ExaminationRepository::DATA_RETENTION_START];
         $dateFrom = self::date($filters['date_from'] ?? null);
         $dateTo = self::date($filters['date_to'] ?? null);
         $type = (string) ($filters['type'] ?? '');
@@ -101,6 +178,28 @@ final class ReportRepository
         if ($dateFrom !== null) { $clauses[] = 'e.examined_on >= :date_from'; $parameters['date_from'] = $dateFrom; }
         if ($dateTo !== null) { $clauses[] = 'e.examined_on <= :date_to'; $parameters['date_to'] = $dateTo; }
         if (ExaminationType::isValid($type)) { $clauses[] = 'e.examination_type = :type'; $parameters['type'] = $type; }
+        $panel = trim((string) ($filters['panel'] ?? ''));
+        if ($panel !== '') {
+            $panelConditions = ['EXISTS (
+                SELECT 1 FROM examination_panel_selections ps
+                INNER JOIN examination_panels ep ON ep.id = ps.panel_id
+                WHERE ps.examination_id = e.id AND ep.code = :report_panel
+            )', 'EXISTS (
+                SELECT 1 FROM examination_parameter_results pr
+                INNER JOIN test_parameters tp ON tp.id = pr.parameter_id
+                INNER JOIN examination_panels ep ON ep.id = tp.panel_id
+                WHERE pr.examination_id = e.id AND ep.code = :report_result_panel
+            )'];
+            $legacy = self::legacyPanelFilter($panel);
+            if ($legacy !== null) $panelConditions[] = $legacy;
+            $clauses[] = '(' . implode(' OR ', $panelConditions) . ')';
+            $parameters['report_panel'] = $panel;
+            $parameters['report_result_panel'] = $panel;
+        }
+        if (in_array($filters['sex'] ?? '', ['L', 'P'], true)) {
+            $clauses[] = 'p.sex = :report_sex';
+            $parameters['report_sex'] = $filters['sex'];
+        }
         if (in_array($insuranceType, ['Umum', 'BPJS Kesehatan', 'Pemerintah Daerah Kota'], true)) {
             $clauses[] = 'p.insurance_type = :insurance_type';
             $parameters['insurance_type'] = $insuranceType;
@@ -116,6 +215,22 @@ final class ReportRepository
         }
 
         return ['SELECT ' . $select . ' FROM examinations e INNER JOIN patients p ON p.id = e.patient_id' . $joins . ' WHERE ' . implode(' AND ', $clauses), $parameters];
+    }
+
+    private static function legacyPanelFilter(string $panel): ?string
+    {
+        $definition = match ($panel) {
+            'hematology_complete' => ['blood_results', ['hgb', 'wbc', 'plt', 'rbc', 'hct', 'lymph_pct', 'mid_pct', 'gran_pct', 'mcv', 'mch', 'mchc', 'eosinophil', 'basophil', 'neutrophil', 'lymphocyte', 'monocyte']],
+            'clinical_chemistry' => ['blood_results', ['gds', 'fasting_glucose', 'glucose_2h_pp', 'urea', 'creatinine', 'cholesterol', 'uric_acid', 'sgot', 'sgpt']],
+            'urinalysis_complete' => ['urine_results', ['color', 'clarity', 'specific_gravity', 'ph', 'protein', 'glucose_reduction', 'urobilinogen', 'bilirubin', 'occult_blood', 'ketone', 'nitrite', 'leukocyte_esterase', 'erythrocytes', 'leukocytes', 'squamous_cells', 'casts', 'crystals', 'bacteria']],
+            'widal' => ['widal_results', ['widal_o', 'widal_ao', 'widal_bo', 'widal_h']],
+            'immunoserology' => ['vital_results', ['blood_group', 'rhesus']],
+            default => null,
+        };
+        if ($definition === null) return null;
+        [$table, $columns] = $definition;
+        $filled = array_map(static fn (string $column): string => 'NULLIF(TRIM(lp.' . $column . '), "") IS NOT NULL', $columns);
+        return 'EXISTS (SELECT 1 FROM ' . $table . ' lp WHERE lp.examination_id = e.id AND (' . implode(' OR ', $filled) . '))';
     }
 
     private static function date(mixed $value): ?string

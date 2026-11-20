@@ -21,14 +21,25 @@
             <?php endif; ?>
             <label>
                 <span><?= View::e($parameter['label']) ?><?php if ($parameter['unit']): ?> <small class="parameter-unit"><?= View::e($parameter['unit']) ?></small><?php endif; ?></span>
-                <?php if ($parameter['result_type'] === 'select'): ?>
+                <?php if ($parameter['code'] === 'WIDAL_O'): ?>
+                    <input name="parameter_values[WIDAL_O]" type="text" list="widal-o-options"
+                           value="<?= View::e($parameter['value'] ?? '') ?>" maxlength="50"
+                           placeholder="Pilih atau ketik hasil" autocomplete="off">
+                    <datalist id="widal-o-options">
+                        <?php foreach (WidalResultOptions::VALUES as $option): ?>
+                            <option value="<?= View::e($option) ?>"></option>
+                        <?php endforeach; ?>
+                    </datalist>
+                <?php elseif ($parameter['result_type'] === 'select'): ?>
+                    <?php $options = ExaminationParameterResultRepository::selectOptions($parameter); ?>
                     <select name="parameter_values[<?= View::e($parameter['code']) ?>]">
                         <option value="">Pilih</option>
-                        <?php foreach ($parameter['options'] ?? [] as $option): ?><option value="<?= View::e($option) ?>" <?= (string) ($parameter['value'] ?? '') === (string) $option ? 'selected' : '' ?>><?= View::e($option) ?></option><?php endforeach; ?>
+                        <?php foreach ($options as $option): ?><option value="<?= View::e($option) ?>" <?= trim((string) ($parameter['value'] ?? '')) === (string) $option ? 'selected' : '' ?>><?= View::e($option) ?></option><?php endforeach; ?>
                     </select>
                 <?php else: ?>
                     <input name="parameter_values[<?= View::e($parameter['code']) ?>]"
                            value="<?= View::e($parameter['result_type'] === 'numeric' ? View::formatNumber($parameter['value'] ?? '') : ($parameter['value'] ?? '')) ?>"
+                           placeholder="<?= View::e($parameter['placeholder'] ?? ReferenceEvaluator::placeholderForTestCode((string) $parameter['code'], in_array($examination['sex'] ?? null, ['L', 'P'], true) ? (string) $examination['sex'] : null) ?? '') ?>"
                            <?= $parameter['result_type'] === 'numeric' ? 'type="text" inputmode="decimal" data-number-format' : 'maxlength="500"' ?>
                            autocomplete="off">
                 <?php endif; ?>

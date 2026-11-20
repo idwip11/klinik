@@ -9,9 +9,11 @@
 
 <form method="get" action="/reports" class="data-form report-filter">
     <div class="field-grid">
-        <label>Dari tanggal<input type="date" name="date_from" value="<?= View::e($filters['date_from'] ?? '') ?>"></label>
-        <label>Sampai tanggal<input type="date" name="date_to" value="<?= View::e($filters['date_to'] ?? '') ?>"></label>
+        <label>Dari tanggal<input type="date" name="date_from" min="<?= ExaminationRepository::DATA_RETENTION_START ?>" value="<?= View::e($filters['date_from'] ?? '') ?>"></label>
+        <label>Sampai tanggal<input type="date" name="date_to" min="<?= ExaminationRepository::DATA_RETENTION_START ?>" value="<?= View::e($filters['date_to'] ?? '') ?>"></label>
         <label>Jenis pemeriksaan<select name="type"><option value="">Semua</option><?php foreach (ExaminationType::labels() as $type => $label): ?><option value="<?= View::e($type) ?>" <?= ($filters['type'] ?? '') === $type ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?></select></label>
+        <label>Panel pemeriksaan<select name="panel"><option value="">Semua panel</option><?php foreach ($reportPanels as $panel): ?><option value="<?= View::e($panel['code']) ?>" <?= ($filters['panel'] ?? '') === $panel['code'] ? 'selected' : '' ?>><?= View::e($panel['name']) ?></option><?php endforeach; ?></select></label>
+        <label>Jenis kelamin<select name="sex"><option value="">Semua</option><option value="P" <?= ($filters['sex'] ?? '') === 'P' ? 'selected' : '' ?>>Perempuan</option><option value="L" <?= ($filters['sex'] ?? '') === 'L' ? 'selected' : '' ?>>Laki-laki</option></select></label>
         <label>Asuransi
             <select name="insurance_type">
                 <option value="">Semua</option>
@@ -45,11 +47,11 @@
         <table class="report-wide-table">
             <thead><tr>
                 <th>No</th><th>No. RM</th><th>No. Lab</th><th>Nama</th><th>Asuransi</th><th>TTL</th><th>L/P</th><th>Gol. darah</th><th>Rhesus</th>
-                <th>HGB</th><th>WBC</th><th>PLT</th><th>RBC</th><th>HCT</th><th>GDS</th><th>CHOL</th><th>UA</th><th>SGOT</th><th>SGPT</th><th>Alamat lengkap</th><th>Tanggal periksa</th><th>Jam periksa</th><th>Aksi</th>
+                <th>HGB</th><th>WBC</th><th>PLT</th><th>RBC</th><th>HCT</th><th>GDS</th><th>CHOL</th><th>UA</th><th>SGOT</th><th>SGPT</th><th class="report-panels-column">Panel pemeriksaan</th><th class="report-results-column">Hasil panel</th><th class="report-address">Alamat lengkap</th><th>Tanggal periksa</th><th>Jam periksa</th><th>Aksi</th>
             </tr></thead>
             <tbody>
             <?php if (empty($records)): ?>
-                <tr><td colspan="23">Tidak ada data untuk filter ini.</td></tr>
+                <tr><td colspan="25">Tidak ada data untuk filter ini.</td></tr>
             <?php else: ?>
                 <?php foreach ($records as $index => $record): ?>
                     <?php
@@ -83,6 +85,22 @@
                         <td><?= View::e($value($record['uric_acid'] ?? null)) ?></td>
                         <td><?= View::e($value($record['sgot'] ?? null)) ?></td>
                         <td><?= View::e($value($record['sgpt'] ?? null)) ?></td>
+                        <td class="report-panels-column">
+                            <?php foreach ($record['panels'] as $panel): ?><span class="report-panel-name"><?= View::e($panel['name']) ?><?= $panel['is_auto_included'] ? ' · otomatis' : '' ?></span><?php endforeach; ?>
+                            <?php if ($record['panels'] === []): ?>—<?php endif; ?>
+                        </td>
+                        <td class="report-results-column">
+                            <?php if ($record['panel_results'] !== []): ?>
+                                <details class="report-results-details">
+                                    <summary><?= count($record['panel_results']) ?> hasil · lihat rincian</summary>
+                                    <dl>
+                                        <?php foreach ($record['panel_results'] as $result): ?>
+                                            <div><dt><?= View::e($result['label']) ?><small><?= View::e($result['panel_name']) ?></small></dt><dd><?= View::e($result['numeric'] ? View::formatNumber($result['value']) : $result['value']) ?><?= $result['unit'] ? ' ' . View::e($result['unit']) : '' ?></dd></div>
+                                        <?php endforeach; ?>
+                                    </dl>
+                                </details>
+                            <?php else: ?>—<?php endif; ?>
+                        </td>
                         <td class="report-address"><?= View::e(($record['address'] ?? '') !== '' ? $record['address'] : '—') ?></td>
                         <td><?= View::e(View::formatDate($record['examined_on'])) ?></td>
                         <td><?= View::e(View::formatTime($record['examined_time'] ?? null) ?: '—') ?></td>
@@ -140,7 +158,7 @@
                 </form>
             </div>
         <?php endif; ?>
-        <?php if ($canViewReportSummary): ?><p class="help-text pagination-export-note">Ekspor Excel memuat seluruh hasil sesuai filter dalam sheet Logbook dan LOGBOOK MCU.</p><?php endif; ?>
+        <?php if ($canViewReportSummary): ?><p class="help-text pagination-export-note">Ekspor Excel memuat seluruh hasil sesuai filter dalam sheet Logbook, LOGBOOK MCU, dan Hasil Panel. Rincian panel mencakup ANC, Widal, dan Imunoserologi beserta nilai rujukan aktif.</p><?php endif; ?>
     </div>
 </section>
 

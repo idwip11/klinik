@@ -31,17 +31,17 @@ $hasRecordedInsurance = array_filter(
     <div class="analytics-section-heading">
         <div>
             <h2 id="analytics-filter-title">Filter analisis</h2>
-            <p class="help-text">Semua ringkasan Analisis menggunakan kumpulan pemeriksaan dan filter yang sama.</p>
+            <p class="help-text">Semua ringkasan Analisis menggunakan kumpulan pemeriksaan dan filter yang sama. Kategori panel menghitung pemeriksaan yang sudah memiliki hasil tersimpan.</p>
         </div>
     </div>
 
     <form method="get" action="/analytics" class="data-form analytics-filter-form">
         <div class="analytics-filter-grid">
             <label>Dari tanggal
-                <input type="date" name="date_from" value="<?= View::e($filters['date_from']) ?>" required>
+                <input type="date" name="date_from" min="<?= ExaminationRepository::DATA_RETENTION_START ?>" value="<?= View::e($filters['date_from']) ?>" required>
             </label>
             <label>Sampai tanggal
-                <input type="date" name="date_to" value="<?= View::e($filters['date_to']) ?>" required>
+                <input type="date" name="date_to" min="<?= ExaminationRepository::DATA_RETENTION_START ?>" value="<?= View::e($filters['date_to']) ?>" required>
             </label>
             <label>Jenis pemeriksaan
                 <select name="type">
@@ -342,7 +342,7 @@ $hasRecordedInsurance = array_filter(
                 <div class="table-wrap analytics-table-wrap">
                     <table class="analytics-table analytics-abnormal-table">
                         <thead>
-                        <tr><th>Parameter</th><th>Kategori</th><th>Jumlah hasil</th><th>Rendah</th><th>Tinggi / abnormal</th><th>Belum dinilai</th><th>Persentase abnormal</th></tr>
+                        <tr><th>Parameter</th><th>Kategori</th><th>Jumlah hasil</th><th>Rendah</th><th>Tinggi / abnormal</th><th>Belum dinilai</th><th>Tanpa penilaian</th><th>Persentase abnormal</th></tr>
                         </thead>
                         <tbody>
                         <?php foreach ($clinical['parameters'] as $row): ?>
@@ -354,7 +354,8 @@ $hasRecordedInsurance = array_filter(
                                 <td class="<?= $row['low_results'] > 0 ? 'analytics-abnormal-number' : '' ?>"><?= View::e(View::formatNumber($row['low_results'])) ?></td>
                                 <td class="<?= $highOrAbnormal > 0 ? 'analytics-abnormal-number' : '' ?>"><?= View::e(View::formatNumber($highOrAbnormal)) ?></td>
                                 <td><?= View::e(View::formatNumber($row['not_assessed_results'])) ?></td>
-                                <td><?= View::e($formatPercentage($row['abnormal_percentage'])) ?></td>
+                                <td><?= View::e(View::formatNumber($row['not_applicable_results'])) ?></td>
+                                <td><?= $row['not_applicable_results'] === $row['total_results'] ? '—' : View::e($formatPercentage($row['abnormal_percentage'])) ?></td>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>
@@ -362,6 +363,7 @@ $hasRecordedInsurance = array_filter(
                 </div>
                 <p class="analytics-scope-note">
                     <?= View::e(View::formatNumber($clinical['totals']['not_assessed_results'])) ?> hasil belum dinilai; <?= View::e(View::formatNumber($clinical['totals']['parameters_without_reference'])) ?> di antaranya tidak mempunyai nilai rujukan aktif yang cocok.
+                    Golongan darah dan Rhesus (<?= View::e(View::formatNumber($clinical['totals']['not_applicable_results'])) ?> hasil) dicatat tanpa penilaian normal/abnormal dan tidak dianggap kekurangan rujukan.
                 </p>
             <?php endif; ?>
         </article>

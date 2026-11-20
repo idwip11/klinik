@@ -1,8 +1,8 @@
 <section class="page-heading page-heading-inline">
     <div>
         <p class="eyebrow">Administrasi</p>
-        <h1>Arsip pasien</h1>
-        <p>Daftar pasien yang diarsipkan. Riwayat pemeriksaan tetap tersimpan dan dapat dibuka kembali.</p>
+        <h1>Data pasien lama</h1>
+        <p>Daftar pasien yang masih berstatus arsip dari versi sebelumnya. Hapus permanen untuk membersihkan data beserta riwayatnya.</p>
     </div>
     <a class="button-link button-secondary" href="/patients">Kembali ke pasien aktif</a>
 </section>
@@ -18,17 +18,18 @@
 <?php else: ?>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>No. RM</th><th>Nama</th><th>NIK</th><th>L/P</th><th>Asuransi</th><th>Diarsipkan</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>No. RM</th><th>Nama</th><th>NIK</th><th>Tanggal Lahir</th><th>L/P</th><th>Asuransi</th><th>Diarsipkan</th><th>Aksi</th></tr></thead>
             <tbody>
             <?php foreach ($patients as $patient): ?>
                 <tr>
                     <td data-label="No. RM"><?= View::e($patient['medical_record_number']) ?></td>
                     <td data-label="Nama"><?= View::e($patient['full_name']) ?></td>
                     <td data-label="NIK"><?= View::e($patient['national_id'] ?: '—') ?></td>
+                    <td data-label="Tanggal Lahir"><?= View::e(View::formatDate($patient['birth_date']) ?: '—') ?></td>
                     <td data-label="L/P"><?= View::e($patient['sex'] ?: '—') ?></td>
                     <td data-label="Asuransi"><?= View::e($patient['insurance_type'] ?: '—') ?></td>
                     <td data-label="Diarsipkan"><?= View::e(View::formatDate(substr((string) ($patient['archived_at'] ?? ''), 0, 10))) ?></td>
-                    <td data-label="Aksi"><a href="/patients/<?= View::e($patient['id']) ?>">Lihat data &amp; pulihkan</a></td>
+                    <td data-label="Aksi"><a href="/patients/<?= View::e($patient['id']) ?>">Lihat data &amp; hapus permanen</a></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

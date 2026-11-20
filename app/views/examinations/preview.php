@@ -4,16 +4,21 @@ $referenceSexLabels = ['L' => 'Laki-laki', 'P' => 'Perempuan', 'ALL' => 'Semua j
 $documentLabels = ['blood_general' => 'Hasil Laboratorium Darah/Umum', 'urine_complete' => 'Hasil Urine Lengkap', 'newborn_blood' => 'Hasil Laboratorium Darah Bayi', 'drug_screen' => 'Hasil Skrining Narkoba'];
 $section = ['urine_complete' => 'urine', 'drug_screen' => 'drug'][$documentType] ?? 'blood';
 $visibleFlags = array_values(array_filter($flags, static fn(array $flag): bool => $flag['section'] === $section));
+$resultDate = ($examination['result_date'] ?? null) ?: $examination['examined_on'];
 ?>
 <div class="no-print preview-toolbar">
-    <a href="/examinations/<?= View::e($examination['id']) ?>">← Kembali ke pemeriksaan</a>
-    <?php if (in_array($examination['status'], ['draft', 'completed', 'finalized'], true)): ?>
-        <form method="post" action="/examinations/<?= View::e($examination['id']) ?>/print" class="inline-form">
-            <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
-            <input type="hidden" name="document_type" value="<?= View::e($documentType) ?>">
-            <button type="submit">Cetak dan catat</button>
-        </form>
-    <?php endif; ?>
+    <a href="/patients/<?= View::e($examination['patient_id']) ?>">← Kembali ke data pasien</a>
+    <div class="preview-toolbar-actions">
+        <a class="button-link button-secondary" href="/examinations/<?= View::e($examination['id']) ?>/preview/excel?type=<?= View::e($documentType) ?>">⬇ Download Excel</a>
+        <a class="button-link button-secondary" href="/examinations/<?= View::e($examination['id']) ?>/preview/pdf?type=<?= View::e($documentType) ?>">⬇ Download PDF</a>
+        <?php if (in_array($examination['status'], ['draft', 'completed', 'finalized'], true)): ?>
+            <form method="post" action="/examinations/<?= View::e($examination['id']) ?>/print" class="inline-form">
+                <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
+                <input type="hidden" name="document_type" value="<?= View::e($documentType) ?>">
+                <button type="submit">Cetak dan catat</button>
+            </form>
+        <?php endif; ?>
+    </div>
 </div>
 
 <?php if ($documentType === 'drug_screen'): ?>
@@ -32,15 +37,7 @@ $visibleFlags = array_values(array_filter($flags, static fn(array $flag): bool =
         <strong><?= View::e($documentLabels[$documentType]) ?></strong>
     </header>
 
-    <dl class="patient-summary">
-        <div><dt>Nama</dt><dd><?= View::e($examination['full_name']) ?></dd></div>
-        <div><dt>No. RM</dt><dd><?= View::e($examination['medical_record_number']) ?></dd></div>
-        <div><dt>No. Lab</dt><dd><?= View::e($examination['lab_number']) ?></dd></div>
-        <div><dt>Tanggal Periksa</dt><dd><?= View::e(View::formatDate($examination['examined_on'])) ?></dd></div>
-        <div><dt>Room</dt><dd><?= View::e(($examination['room'] ?? null) ?: '—') ?></dd></div>
-        <div><dt>Jenis Kelamin</dt><dd><?= View::e($examination['sex']) ?></dd></div>
-        <div><dt>Tanggal Lahir</dt><dd><?= View::e(View::formatDate($examination['birth_date'])) ?></dd></div>
-    </dl>
+    <?php require ROOT_PATH . '/app/views/examinations/patient_identity.php'; ?>
 
     <?php if ($documentType === 'blood_general'): ?>
         <table class="print-table vital-table">
@@ -77,7 +74,7 @@ $visibleFlags = array_values(array_filter($flags, static fn(array $flag): bool =
 
     <footer class="print-footer">
         <p>Dokumen ini menampilkan hasil dan rentang referensi yang tersimpan saat data disimpan.</p>
-        <div class="signature-block"><span>Penanggung jawab</span><span class="signature-line">&nbsp;</span></div>
+        <div class="signature-block"><span><?= View::e(View::formatLongDate($resultDate)) ?></span><span>Penanggung jawab</span><span class="signature-line">&nbsp;</span></div>
     </footer>
 </article>
 

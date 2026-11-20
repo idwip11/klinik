@@ -120,6 +120,7 @@ $temporaryTables = [
     'CREATE TEMPORARY TABLE examination_panel_selections (
         examination_id BIGINT UNSIGNED NOT NULL,
         panel_id BIGINT UNSIGNED NOT NULL,
+        is_auto_included TINYINT NOT NULL DEFAULT 0,
         PRIMARY KEY (examination_id, panel_id)
     )',
     'CREATE TEMPORARY TABLE examination_parameter_results (
@@ -296,7 +297,7 @@ analyticsAssert(
     'Tab tren harus memuat setiap periode pada dashboard.'
 );
 analyticsAssert(
-    $exportSheets[5]['headers'] === ['Parameter', 'Kode', 'Kategori', 'Jumlah hasil', 'Rendah', 'Tinggi / abnormal', 'Belum dinilai', 'Persentase abnormal (%)'],
+    $exportSheets[5]['headers'] === ['Parameter', 'Kode', 'Kategori', 'Jumlah hasil', 'Rendah', 'Tinggi / abnormal', 'Belum dinilai', 'Tanpa penilaian', 'Persentase abnormal (%)'],
     'Header tab hasil abnormal tidak sesuai tabel dashboard.'
 );
 analyticsAssert(

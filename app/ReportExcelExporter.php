@@ -97,6 +97,10 @@ final class ReportExcelExporter
             $zip->addFromString('xl/styles.xml', self::styles());
             $zip->addFromString('xl/worksheets/sheet1.xml', self::worksheet($logbookRows, self::logbookHeaders(), self::logbookWidths()));
             $zip->addFromString('xl/worksheets/sheet2.xml', self::worksheet($mcuRows, self::mcuHeaders(), self::mcuWidths()));
+            $panelSheet = self::panelSheet($rows);
+            $zip->addFromString('xl/worksheets/sheet3.xml', self::worksheet(
+                array_map([self::class, 'typedRow'], $panelSheet['rows']), $panelSheet['headers'], $panelSheet['widths']
+            ));
             $zip->addFromString('docProps/core.xml', self::coreProperties());
             $zip->addFromString('docProps/app.xml', self::appProperties());
             $zip->close();
@@ -110,6 +114,26 @@ final class ReportExcelExporter
         }
 
         exit;
+    }
+
+    /** @param list<array<string,mixed>> $records @return array{headers:list<string>,widths:list<int>,rows:list<list<mixed>>} */
+    public static function panelSheet(array $records): array
+    {
+        $rows = [];
+        $interpretations = ['normal' => 'Normal', 'low' => 'Rendah', 'high' => 'Tinggi', 'abnormal' => 'Abnormal', 'not_assessed' => 'Belum dinilai'];
+        foreach ($records as $record) {
+            foreach ($record['panel_results'] ?? [] as $result) {
+                $needsReference = ReferenceEvaluator::requiresReference($result['code']);
+                $rows[] = [
+                    $record['lab_number'], self::dateText($record['examined_on']), $record['medical_record_number'], $record['full_name'], self::sex($record['sex'] ?? null),
+                    $result['panel_name'], $result['label'], $result['numeric'] ? self::number($result['value']) : $result['value'],
+                    $result['unit'] ?? '', $needsReference ? ($result['reference_text'] ?? 'Belum dikonfigurasi') : '',
+                    $needsReference ? ($interpretations[$result['interpretation'] ?? 'not_assessed'] ?? 'Belum dinilai') : '',
+                ];
+            }
+        }
+        return ['headers' => ['No. Lab', 'Tanggal Periksa', 'No. RM', 'Nama', 'Jenis Kelamin', 'Panel Pemeriksaan', 'Parameter', 'Hasil', 'Satuan', 'Nilai Rujukan Aktif', 'Penilaian'],
+            'widths' => [18, 18, 14, 28, 16, 34, 30, 20, 14, 28, 20], 'rows' => $rows];
     }
 
     /** @return list<string> */
@@ -303,7 +327,7 @@ final class ReportExcelExporter
 
     private static function contentTypes(): string
     {
-        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>';
+        return self::aggregateContentTypes(3);
     }
 
     private static function rootRelationships(): string
@@ -313,12 +337,12 @@ final class ReportExcelExporter
 
     private static function workbook(): string
     {
-        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><fileVersion appName="xl"/><workbookPr/><bookViews><workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="12000"/></bookViews><sheets><sheet name="Logbook" sheetId="1" r:id="rId1"/><sheet name="LOGBOOK MCU" sheetId="2" r:id="rId2"/></sheets><calcPr calcId="191029"/></workbook>';
+        return self::aggregateWorkbook([['name' => 'Logbook'], ['name' => 'LOGBOOK MCU'], ['name' => 'Hasil Panel']]);
     }
 
     private static function workbookRelationships(): string
     {
-        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+        return self::aggregateWorkbookRelationships(3);
     }
 
     private static function styles(): string

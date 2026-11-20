@@ -1,6 +1,9 @@
 .env
 .DS_Store
 /.artifact-runtime/
+/vendor/
+/tmp/
+/release-artifacts/
 /*.zip
 /*.sql
 /*.sql.gz

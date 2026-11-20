@@ -1,30 +1,21 @@
-# Pengarsipan dan Penghapusan Data Pasien
+# Penghapusan Permanen Data Pasien
 
-## Tujuan
+## Kebijakan saat ini
 
-Menjaga riwayat pemeriksaan tetap terlacak, sambil memberi administrator cara aman untuk menyingkirkan data pasien yang tidak lagi aktif atau data uji.
+Aplikasi menggunakan penghapusan permanen untuk membersihkan data pasien. Penghapusan memerlukan konfirmasi nomor RM dan menghapus identitas pasien, seluruh pemeriksaan, hasil pemeriksaan, serta log cetak dalam satu transaksi database.
 
-## Aturan aplikasi
+Nomor RM otomatis tidak lagi mempertimbangkan pasien yang sudah dihapus. Nomor Lab untuk tanggal yang pemeriksaannya sudah dihapus juga akan menghitung ulang urutan dari data yang masih tersisa.
 
-| Kondisi pasien | Tindakan yang tersedia | Dampak |
-| --- | --- | --- |
-| Belum memiliki pemeriksaan | Hapus permanen | Data pasien dihapus dan tidak dapat dipulihkan. |
-| Memiliki satu atau lebih pemeriksaan | Arsipkan | Pasien tidak tampil pada pencarian aktif dan tidak dapat dibuatkan pemeriksaan baru; identitas serta riwayat pemeriksaan tetap tersimpan. |
-| Sudah diarsipkan | Pulihkan | Pasien kembali ke pencarian aktif dan dapat dibuatkan pemeriksaan baru. |
+Kolom `archived_at` dan halaman data lama tetap dipertahankan sementara untuk menangani pasien yang dibuat pada versi aplikasi sebelumnya. Data lama tersebut perlu dihapus permanen oleh administrator melalui halaman pasien terkait.
 
-## Pengamanan
+## Data yang dihapus
 
-- Hanya pengguna dengan peran `admin` yang dapat mengarsipkan, memulihkan, atau menghapus permanen.
-- Admin harus mengetik nomor RM yang tepat sebelum tindakan arsip atau hapus diproses.
-- Penghapusan permanen ditolak kembali oleh backend bila pasien mempunyai riwayat pemeriksaan, termasuk jika permintaan dibuat langsung tanpa memakai tombol aplikasi.
-- Setiap pengarsipan, pemulihan, dan penghapusan dicatat pada audit log.
+- Hanya pengguna dengan peran `admin` yang dapat menghapus permanen.
+- Admin harus mengetik nomor RM yang tepat sebelum tindakan diproses.
+- Penghapusan pasien dengan riwayat pemeriksaan tetap diizinkan dan ikut menghapus seluruh data pemeriksaan terkait.
+- Penghapusan juga menghapus hasil pemeriksaan, hasil panel, flag, serta log cetak yang terkait.
+- Setiap penghapusan dicatat pada audit log, tetapi data klinis pasien yang dihapus tidak dapat dipulihkan.
 
-## Catatan operasional
+## Data lama
 
-Penghapusan permanen dimaksudkan untuk data yang dibuat keliru atau data uji tanpa riwayat pemeriksaan. Untuk pasien nyata yang sudah mempunyai hasil laboratorium, gunakan pengarsipan.
-
-Pemeriksaan milik pasien yang sudah diarsipkan tidak ditampilkan pada menu **Rekap pemeriksaan** maupun hasil ekspornya. Riwayatnya hanya dapat dilihat dari **Arsip pasien** sampai pasien dipulihkan.
-
-## Lokasi menu
-
-Administrator dapat membuka menu **Arsip pasien** pada navigasi utama atau tautan di halaman **Pasien**. Daftar ini mendukung pencarian berdasarkan nomor RM, NIK, atau nama. Pilih **Lihat data & pulihkan** untuk membuka riwayat pasien dan memulihkannya.
+Pasien yang masih berstatus arsip dari versi sebelumnya tidak lagi menerima opsi pulihkan. Administrator dapat membukanya melalui halaman data pasien lama dan memilih penghapusan permanen.

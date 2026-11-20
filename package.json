@@ -1,0 +1,10 @@
+{
+  "name": "klinik-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplikasi Operasional Laboratorium Klinik",
+  "scripts": {
+    "dev": "php -S localhost:8092 -t public",
+    "start": "php -S localhost:8092 -t public"
+  }
+}

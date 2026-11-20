@@ -64,7 +64,8 @@ final class AnalyticsAggregateExporter
             $rows[] = ['Hasil abnormal per parameter', $label, 'Rendah', (int) $row['low_results'], '', ''];
             $rows[] = ['Hasil abnormal per parameter', $label, 'Tinggi / abnormal', (int) $row['high_results'] + (int) $row['qualitative_abnormal_results'], '', ''];
             $rows[] = ['Hasil abnormal per parameter', $label, 'Belum dinilai', (int) $row['not_assessed_results'], '', 'Tidak dihitung sebagai normal.'];
-            $rows[] = ['Hasil abnormal per parameter', $label, 'Persentase abnormal', (int) $row['abnormal_results'], (float) $row['abnormal_percentage'], 'Denominator hanya hasil yang berhasil dinilai.'];
+            $rows[] = ['Hasil abnormal per parameter', $label, 'Tanpa penilaian', (int) $row['not_applicable_results'], '', 'Golongan darah/Rhesus tidak memerlukan nilai rujukan.'];
+            $rows[] = ['Hasil abnormal per parameter', $label, 'Persentase abnormal', (int) $row['abnormal_results'], $row['not_applicable_results'] === $row['total_results'] ? '' : (float) $row['abnormal_percentage'], 'Denominator hanya hasil yang berhasil dinilai.'];
         }
 
         foreach (self::qualityMetrics($quality) as $metric => [$total, $note]) {
@@ -150,7 +151,8 @@ final class AnalyticsAggregateExporter
                 (int) $row['low_results'],
                 (int) $row['high_results'] + (int) $row['qualitative_abnormal_results'],
                 (int) $row['not_assessed_results'],
-                (float) $row['abnormal_percentage'],
+                (int) $row['not_applicable_results'],
+                $row['not_applicable_results'] === $row['total_results'] ? '' : (float) $row['abnormal_percentage'],
             ];
         }
 
@@ -192,9 +194,9 @@ final class AnalyticsAggregateExporter
             ],
             [
                 'name' => 'Hasil abnormal',
-                'headers' => ['Parameter', 'Kode', 'Kategori', 'Jumlah hasil', 'Rendah', 'Tinggi / abnormal', 'Belum dinilai', 'Persentase abnormal (%)'],
+                'headers' => ['Parameter', 'Kode', 'Kategori', 'Jumlah hasil', 'Rendah', 'Tinggi / abnormal', 'Belum dinilai', 'Tanpa penilaian', 'Persentase abnormal (%)'],
                 'rows' => $abnormalRows,
-                'widths' => [30, 20, 32, 16, 14, 22, 18, 26],
+                'widths' => [30, 20, 32, 16, 14, 22, 18, 20, 26],
             ],
             [
                 'name' => 'Kualitas data',
@@ -274,7 +276,7 @@ final class AnalyticsAggregateExporter
         return [
             'Pemeriksaan draft' => [(int) $quality['draft_examinations'], 'Termasuk data legacy terverifikasi pada filter.'],
             'Pemeriksaan tanpa hasil' => [(int) $quality['completed_without_results'], 'Hanya status tersimpan atau final.'],
-            'Panel modern belum lengkap' => [(int) $quality['incomplete_modern_panels'], 'Dibandingkan dengan parameter yang diharapkan.'],
+            'Panel modern belum lengkap' => [(int) $quality['incomplete_modern_panels'], 'Dibandingkan dengan parameter yang diharapkan; panel otomatis yang seluruh hasilnya kosong tidak dihitung.'],
             'Pemeriksaan tanpa tanggal lahir valid' => [(int) $quality['missing_birth_date'], 'Dihitung per pemeriksaan.'],
             'Pemeriksaan tanpa jenis kelamin' => [(int) $quality['missing_sex'], 'Nilai kosong atau di luar L/P.'],
             'Pemeriksaan tanpa penjamin' => [(int) $quality['missing_insurance'], 'Profil penjamin pasien belum diisi.'],

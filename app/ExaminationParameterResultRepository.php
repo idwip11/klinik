@@ -4,6 +4,25 @@ declare(strict_types=1);
 
 final class ExaminationParameterResultRepository
 {
+    private const HISTORICAL_TEXT_SELECT_CODES = [
+        'WIDAL_AO', 'WIDAL_BO', 'WIDAL_H',
+        'HBSAG_RAPID', 'HIV_RAPID', 'SYPHILIS_RAPID',
+    ];
+
+    /** @param array<string,mixed> $parameter @return list<string> */
+    public static function selectOptions(array $parameter): array
+    {
+        $options = is_array($parameter['options'] ?? null) ? $parameter['options'] : [];
+        $storedValue = trim((string) ($parameter['value'] ?? ''));
+        // Preserve a former free-text result only for its own examination and parameter.
+        if (in_array($parameter['code'], self::HISTORICAL_TEXT_SELECT_CODES, true)
+            && $storedValue !== '' && !in_array($storedValue, $options, true)) {
+            $options[] = $storedValue;
+        }
+
+        return $options;
+    }
+
     /**
      * @param list<array<string, mixed>> $panels
      * @return array{rows:list<array<string,mixed>>,values:array<string,?string>}
@@ -42,14 +61,15 @@ final class ExaminationParameterResultRepository
                 $numericValue = self::numeric($value, (string) $parameter['label']);
                 $values[$code] = $numericValue;
             } elseif ($parameter['result_type'] === 'select') {
-                $options = is_array($parameter['options'] ?? null) ? $parameter['options'] : [];
+                $options = self::selectOptions($parameter);
                 if (!in_array($value, $options, true)) {
                     throw new ValidationException(['form' => 'Pilihan hasil ' . $parameter['label'] . ' tidak valid.']);
                 }
                 $textValue = $value;
                 $values[$code] = $textValue;
             } else {
-                if (mb_strlen($value) > 500) {
+                $maxLength = $code === 'WIDAL_O' ? 50 : 500;
+                if (mb_strlen($value) > $maxLength) {
                     throw new ValidationException(['form' => 'Hasil ' . $parameter['label'] . ' terlalu panjang.']);
                 }
                 $textValue = $value;

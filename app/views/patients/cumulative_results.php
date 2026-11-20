@@ -95,7 +95,9 @@ $sexLabels = ['L' => 'Laki-laki', 'P' => 'Perempuan'];
                                 $referenceAppliesToAll = $referenceSummary['available_count'] === count($cumulativeData['examinations']);
                                 ?>
                                 <td class="cumulative-reference">
-                                    <?php if ($referenceEntries === []): ?>
+                                    <?php if (!ReferenceEvaluator::requiresReference($parameter['code'])): ?>
+                                        <span class="cumulative-empty">—</span>
+                                    <?php elseif ($referenceEntries === []): ?>
                                         <span class="cumulative-reference-unavailable">Belum tersedia</span>
                                     <?php else: ?>
                                         <?php foreach ($referenceEntries as $referenceEntry): ?>

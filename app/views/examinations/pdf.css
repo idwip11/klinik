@@ -1,0 +1,49 @@
+@page { size: A4 portrait; margin: 8mm; }
+body { color: #172033; font-family: "DejaVu Sans", sans-serif; font-size: 9pt; line-height: 1.35; margin: 0; }
+article { margin: 0; padding: 0; }
+.dl-dll-header, .panel-print-header, .drug-print-header { margin: -8mm -8mm 5mm; }
+.dl-dll-header img, .panel-print-header img, .drug-print-header img { display: block; width: 210mm; }
+.print-header { border-bottom: 1pt solid #172033; margin-bottom: 5mm; padding-bottom: 3mm; }
+.print-header h1 { font-size: 16pt; margin: 0; }
+.print-header p { font-size: 8pt; margin: 1mm 0; }
+.print-header strong { display: block; margin-top: 3mm; }
+.pdf-patient-summary { border-bottom: .5pt solid #aeb8c5; border-collapse: collapse; margin: 0 0 4mm; table-layout: fixed; width: 100%; page-break-inside: avoid; }
+.pdf-patient-summary td { border: 0; line-height: 1.2; padding: .4mm 0; vertical-align: top; overflow-wrap: break-word; }
+.pdf-patient-label { color: #526276; font-size: 13px; width: 20%; }
+.pdf-patient-value { font-size: 13px; font-weight: bold; width: 30%; }
+.pdf-patient-left-value { width: 35%; }
+.pdf-patient-right-label { width: 20%; }
+.pdf-patient-right-value { width: 25%; }
+.print-table { border-collapse: collapse; margin: 0 0 4mm; width: 100%; }
+.print-table th, .print-table td { border: .5pt solid #909bab; font-size: 8pt; padding: 1.35mm 1.6mm; vertical-align: top; overflow-wrap: break-word; }
+.print-table thead { display: table-header-group; }
+.print-table thead th { background: #f2f5f7; font-size: 7.5pt; text-align: left; }
+.print-table tr { page-break-inside: avoid; }
+.dl-dll-section, .dl-dll-subsection, .panel-print-section, .panel-print-subsection, .drug-print-section { page-break-after: avoid; }
+.print-table .laboratory-result-title th { background: #12bfa2; color: #172033; font-size: 9pt; text-align: center; }
+.dl-dll-section th, .panel-print-section th, .drug-print-section th { background: #12bfa2; color: #fff; font-weight: bold; text-align: left; }
+.dl-dll-subsection th, .panel-print-subsection th { background: #e7f7f3; color: #405168; text-align: left; }
+.reference-value { white-space: pre-line; }
+.result-value { font-weight: bold; }
+.result-abnormal, .interpretation-abnormal { color: #a32424; font-weight: bold; }
+.interpretation-low, .interpretation-high, .interpretation-normal { text-align: center; }
+.interpretation-marker { font-family: "DejaVu Sans", sans-serif; font-weight: bold; }
+.print-footer, .panel-print-signature, .drug-post-table { margin-top: 6mm; page-break-inside: avoid; }
+.print-footer { border-top: .5pt solid #aeb8c5; padding-top: 3mm; }
+.print-footer p { font-size: 7pt; margin: 0 0 3mm; }
+.signature-block, .panel-print-signature-block, .drug-signature-block { font-size: 8pt; margin-left: 62%; text-align: left; }
+.signature-block span, .panel-print-signature-block div, .drug-signature-block div { display: block; }
+.signature-line, .panel-print-signature-line, .drug-signature-line { border-top: .5pt solid #172033; display: block; margin-top: 16mm; }
+.panel-print-footer, .drug-print-footer { height: 12mm; margin: 8mm -8mm 0; overflow: hidden; }
+.panel-print-footer img, .drug-print-footer img { display: block; margin-top: -7.6mm; width: 210mm; }
+.drug-print-table th, .drug-print-table td { text-align: center; }
+.drug-print-table th:first-child, .drug-print-table td:first-child { text-align: left; }
+.drug-specimen-time { color: #526276; font-size: 8pt; margin-bottom: 4mm; }
+.drug-specimen-time-label span { display: none; }
+.drug-page-footer { margin-top: 10mm; page-break-inside: avoid; }
+.drug-contact { font-size: 7pt; }
+.drug-contact-item { display: inline-block; margin-right: 4mm; vertical-align: middle; }
+.drug-contact-item a { color: #172033; text-decoration: none; }
+.drug-verification-qr { height: 14mm; vertical-align: middle; width: 14mm; }
+.drug-contact-icon { display: none; }
+.pdf-contact-icon { height: 4mm; width: 4mm; }

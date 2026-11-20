@@ -12,25 +12,24 @@ $interpretationSymbols = [
     'normal' => '',
     'high' => '▲',
 ];
-$referenceNotApplicableCodes = ['BLOOD_GROUP', 'RHESUS'];
+$referenceNotApplicableCodes = ['BLOOD_GROUP', 'RHESUS', 'ANC_BLOOD_GROUP'];
 $flagsByCode = [];
 foreach ($flags as $flag) {
     $flagsByCode[(string) $flag['test_code']] = $flag;
 }
-$birthText = trim(($examination['birth_place'] ?? '') . (($examination['birth_place'] ?? '') && ($examination['birth_date'] ?? '') ? ', ' : '') . View::formatDate($examination['birth_date'] ?? null));
-$monthNames = [
-    1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni',
-    7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
-];
-$today = new DateTimeImmutable('now', new DateTimeZone('Asia/Makassar'));
-$todayText = $today->format('d') . ' ' . $monthNames[(int) $today->format('n')] . ' ' . $today->format('Y');
+$resultDate = ($examination['result_date'] ?? null) ?: $examination['examined_on'];
+$resultDateText = View::formatLongDate($resultDate);
 ?>
 <div class="no-print preview-toolbar">
-    <a href="/examinations/<?= View::e($examination['id']) ?>">← Kembali ke pemeriksaan</a>
-    <form method="post" action="/examinations/<?= View::e($examination['id']) ?>/panel-print" class="inline-form">
-        <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
-        <button type="submit">Cetak A4</button>
-    </form>
+    <a href="/patients/<?= View::e($examination['patient_id']) ?>">← Kembali ke data pasien</a>
+    <div class="preview-toolbar-actions">
+        <a class="button-link button-secondary" href="/examinations/<?= View::e($examination['id']) ?>/panel-print/excel">⬇ Download Excel</a>
+        <a class="button-link button-secondary" href="/examinations/<?= View::e($examination['id']) ?>/panel-print/pdf">⬇ Download PDF</a>
+        <form method="post" action="/examinations/<?= View::e($examination['id']) ?>/panel-print" class="inline-form">
+            <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
+            <button type="submit">Cetak A4</button>
+        </form>
+    </div>
 </div>
 
 <article class="print-sheet panel-print-sheet">
@@ -38,16 +37,7 @@ $todayText = $today->format('d') . ' ' . $monthNames[(int) $today->format('n')] 
         <img src="/assets/header-basmalah.png" alt="">
     </header>
 
-    <dl class="panel-print-patient">
-        <div class="panel-print-medical-record"><dt>No. RM</dt><dd><?= View::e($examination['medical_record_number']) ?></dd></div>
-        <div><dt>No. Laboratorium</dt><dd><?= View::e($examination['lab_number']) ?></dd></div>
-        <div><dt>Nama pasien</dt><dd><?= View::e($examination['full_name']) ?></dd></div>
-        <div><dt>Jenis kelamin</dt><dd><?= View::e($sexLabels[$examination['sex']] ?? ($examination['sex'] ?: '—')) ?></dd></div>
-        <div><dt>Tempat, tanggal lahir</dt><dd><?= View::e($birthText ?: '—') ?></dd></div>
-        <div><dt>Tanggal periksa</dt><dd><?= View::e(View::formatDate($examination['examined_on'])) ?></dd></div>
-        <div><dt>Room</dt><dd><?= View::e(($examination['room'] ?? null) ?: '—') ?></dd></div>
-        <div class="panel-print-wide"><dt>Alamat</dt><dd><?= View::e($examination['address'] ?: '—') ?></dd></div>
-    </dl>
+    <?php require ROOT_PATH . '/app/views/examinations/patient_identity.php'; ?>
 
     <table class="print-table panel-print-table">
         <thead>
@@ -94,7 +84,8 @@ $todayText = $today->format('d') . ' ' . $monthNames[(int) $today->format('n')] 
                         <td><?= View::e($parameter['label']) ?></td>
                         <td class="result-value<?= $isAbnormal ? ' result-abnormal' : '' ?>"><?= View::e($hasValue ? View::formatNumber((string) $value) : '—') ?></td>
                         <td class="interpretation-<?= View::e(is_string($interpretation) ? $interpretation : 'not_assessed') ?>">
-                            <?php if ($hasDirectionSymbol && $interpretationSymbols[$interpretation] !== ''): ?>
+                            <?php if ($parameter['code'] === 'ANC_BLOOD_GROUP'): ?>
+                            <?php elseif ($hasDirectionSymbol && $interpretationSymbols[$interpretation] !== ''): ?>
                                 <span class="interpretation-marker" title="<?= View::e($interpretationLabels[$interpretation]) ?>" aria-label="<?= View::e($interpretationLabels[$interpretation]) ?>"><?= View::e($interpretationSymbols[$interpretation]) ?></span>
                             <?php elseif (!$hasDirectionSymbol): ?>
                                 <?= View::e($hasValue && is_string($interpretation) ? ($interpretationLabels[$interpretation] ?? 'Belum dinilai') : ($hasValue ? 'Belum dinilai' : 'Belum diisi')) ?>
@@ -110,7 +101,7 @@ $todayText = $today->format('d') . ' ' . $monthNames[(int) $today->format('n')] 
 
     <div class="panel-print-signature">
         <div class="panel-print-signature-block">
-            <div><?= View::e($todayText) ?></div>
+            <div><?= View::e($resultDateText) ?></div>
             <div>Penanggung jawab</div>
             <span class="panel-print-signature-line">&nbsp;</span>
         </div>

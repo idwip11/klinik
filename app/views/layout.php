@@ -8,6 +8,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title><?= View::e($pageTitle) ?> · Klinik Lab</title>
     <link rel="stylesheet" href="/assets/app.css">
+    <script src="/assets/app.js" defer></script>
 </head>
 <body>
 <?php if (Auth::check()): ?>

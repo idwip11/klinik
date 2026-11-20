@@ -11,6 +11,7 @@ $expectedCounts = [
     'widal' => 4,
     'additional_rare' => 5,
     'immunoserology' => 11,
+    'anc_ibu_hamil' => 7,
 ];
 
 $panels = ExaminationPanelCatalogRepository::all();
@@ -29,13 +30,18 @@ foreach ($panels as $panel) {
     unset($expectedCounts[$code]);
 }
 
-$selection = ExaminationPanelCatalogRepository::selectionFromInput(['hematology_complete', 'widal']);
+$selection = ExaminationPanelCatalogRepository::selectionFromInput(['hematology_complete']);
 $selectionCodes = array_column($selection, 'code');
-if ($selectionCodes !== ['hematology_complete', 'widal', 'immunoserology']) {
-    $failures[] = 'Pemilihan beberapa panel harus menambahkan immunoserology secara otomatis.';
+if ($selectionCodes !== ['hematology_complete', 'widal']) {
+    $failures[] = 'Pemilihan panel harus menambahkan Widal otomatis tanpa Imunoserologi.';
 }
-if (($selection[2]['is_auto_included'] ?? false) !== true) {
-    $failures[] = 'Panel immunoserology harus ditandai sebagai panel otomatis.';
+if (($selection[1]['is_auto_included'] ?? false) !== true) {
+    $failures[] = 'Panel Widal harus ditandai sebagai panel otomatis.';
+}
+$withImmunoserology = ExaminationPanelCatalogRepository::selectionFromInput(['hematology_complete', 'immunoserology']);
+if (array_column($withImmunoserology, 'code') !== ['hematology_complete', 'widal', 'immunoserology']
+    || $withImmunoserology[2]['is_auto_included']) {
+    $failures[] = 'Imunoserologi hanya disertakan saat dipilih secara manual.';
 }
 
 foreach (array_keys($expectedCounts) as $missingCode) {
@@ -46,8 +52,8 @@ $alwaysIncluded = array_values(array_filter(
     $panels,
     static fn (array $panel): bool => $panel['is_always_included']
 ));
-if (count($alwaysIncluded) !== 1 || $alwaysIncluded[0]['code'] !== 'immunoserology') {
-    $failures[] = 'Hanya panel immunoserology yang boleh selalu disertakan.';
+if (count($alwaysIncluded) !== 1 || $alwaysIncluded[0]['code'] !== 'widal') {
+    $failures[] = 'Hanya panel Widal yang boleh selalu disertakan.';
 }
 
 foreach ($panels as $panel) {

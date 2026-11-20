@@ -34,10 +34,51 @@ final class View
         return $date !== false && $date->format('Y-m-d') === $value ? $date->format('d/m/Y') : $value;
     }
 
+    public static function formatLongDate(mixed $value): string
+    {
+        $value = (string) ($value ?? '');
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        if ($date === false || $date->format('Y-m-d') !== $value) {
+            return $value;
+        }
+
+        $months = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni',
+            7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
+
+        return $date->format('d') . ' ' . $months[(int) $date->format('n')] . ' ' . $date->format('Y');
+    }
+
+    public static function formatDateForInput(mixed $value): string
+    {
+        $value = trim((string) ($value ?? ''));
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        return $date !== false && $date->format('Y-m-d') === $value ? $date->format('d-m-Y') : $value;
+    }
+
     public static function formatTime(mixed $value): string
     {
         $value = trim((string) ($value ?? ''));
         return $value === '' ? '' : substr($value, 0, 5);
+    }
+
+    /** Age on the examination date, not the date the document is opened. */
+    public static function formatAge(mixed $birthDate, mixed $examinedOn): string
+    {
+        $birthDate = trim((string) ($birthDate ?? ''));
+        $examinedOn = trim((string) ($examinedOn ?? ''));
+        $birth = DateTimeImmutable::createFromFormat('!Y-m-d', $birthDate);
+        $examined = DateTimeImmutable::createFromFormat('!Y-m-d', $examinedOn);
+        if ($birth === false || $examined === false
+            || $birth->format('Y-m-d') !== $birthDate
+            || $examined->format('Y-m-d') !== $examinedOn
+            || $birth > $examined) {
+            return '—';
+        }
+        $age = $birth->diff($examined);
+        return $age->y . ' tahun ' . $age->m . ' bulan ' . $age->d . ' hari';
     }
 
     public static function formatNumber(mixed $value): string

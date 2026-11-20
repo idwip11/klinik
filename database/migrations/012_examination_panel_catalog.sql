@@ -55,11 +55,11 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO test_parameters
     (panel_id, code, label, subsection, result_type, unit, options_json, legacy_field, is_required, print_when_empty, is_active, display_order, created_at, updated_at)
 VALUES
-    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'HGB', 'Hemoglobin', 'Hematologi', 'numeric', 'g/dL', NULL, 'hgb', 0, 1, 1, 10, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
-    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'WBC', 'Leukosit', 'Hematologi', 'numeric', 'sel/mm³', NULL, 'wbc', 0, 1, 1, 20, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
-    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'PLT', 'Trombosit', 'Hematologi', 'numeric', 'sel/mm³', NULL, 'plt', 0, 1, 1, 30, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
-    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'RBC', 'Eritrosit', 'Hematologi', 'numeric', 'juta/µL', NULL, 'rbc', 0, 1, 1, 40, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
-    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'HCT', 'Hematokrit', 'Hematologi', 'numeric', '%', NULL, 'hct', 0, 1, 1, 50, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
+    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'HGB', 'Hemoglobin (HGB)', 'Hematologi', 'numeric', 'g/dL', NULL, 'hgb', 0, 1, 1, 10, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
+    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'HCT', 'Hematokrit (HCT)', 'Hematologi', 'numeric', '%', NULL, 'hct', 0, 1, 1, 20, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
+    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'RBC', 'Eritrosit (RBC)', 'Hematologi', 'numeric', 'juta/µL', NULL, 'rbc', 0, 1, 1, 30, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
+    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'WBC', 'Leukosit (WBC)', 'Hematologi', 'numeric', 'sel/mm³', NULL, 'wbc', 0, 1, 1, 40, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
+    ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'PLT', 'Trombosit (PLT)', 'Hematologi', 'numeric', 'sel/mm³', NULL, 'plt', 0, 1, 1, 50, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
     ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'LYMPH_PCT', 'LYMPH%', 'Hitung Jenis Leukosit (3 Bagian)', 'numeric', '%', NULL, 'lymph_pct', 0, 1, 1, 60, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
     ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'MID_PCT', 'MID%', 'Hitung Jenis Leukosit (3 Bagian)', 'numeric', '%', NULL, 'mid_pct', 0, 1, 1, 70, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
     ((SELECT id FROM examination_panels WHERE code = 'hematology_complete'), 'GRAN_PCT', 'GRAN%', 'Hitung Jenis Leukosit (3 Bagian)', 'numeric', '%', NULL, 'gran_pct', 0, 1, 1, 80, UTC_TIMESTAMP(), UTC_TIMESTAMP()),

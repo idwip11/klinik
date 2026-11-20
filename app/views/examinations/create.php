@@ -24,11 +24,11 @@ foreach (is_array($input['panel_codes'] ?? null) ? $input['panel_codes'] : [] as
                 </select>
             </label>
             <input type="hidden" name="suggested_lab_number" id="suggested-lab-number" value="<?= View::e($input['suggested_lab_number'] ?? '') ?>">
-            <label>Nomor lab *<input name="lab_number" id="lab-number" value="<?= View::e($input['lab_number'] ?? '') ?>" required maxlength="50" autofocus data-auto-suggested="<?= !empty($labNumberIsAutomatic) ? '1' : '0' ?>"></label>
-            <label>Tanggal periksa *<input name="examined_on" id="examined-on" type="date" value="<?= View::e($input['examined_on'] ?? ExaminationRepository::nowInWib()->format('Y-m-d')) ?>" required></label>
-            <label>Jam periksa (WIB)<input type="time" value="<?= View::e($input['examined_time'] ?? ExaminationRepository::nowInWib()->format('H:i')) ?>" readonly aria-readonly="true"></label>
+            <label>Nomor lab *<input name="lab_number" id="lab-number" value="<?= View::e($input['lab_number'] ?? '') ?>" required maxlength="50" autofocus data-auto-suggested="<?= !empty($labNumberIsAutomatic) ? '1' : '0' ?>"><small>Otomatis: YYMMDDNNNN, contoh 2609030001. Dapat dikoreksi manual.</small></label>
+            <label>Tanggal periksa *<input name="examined_on" id="examined-on" type="date" min="<?= ExaminationRepository::DATA_RETENTION_START ?>" value="<?= View::e($input['examined_on'] ?? ExaminationRepository::nowInWib()->format('Y-m-d')) ?>" required></label>
+            <label>Jam periksa (WIB) *<input name="examined_time" type="time" value="<?= View::e($input['examined_time'] ?? ExaminationRepository::nowInWib()->format('H:i')) ?>" required></label>
             <label>Nomor surat<input name="letter_number" value="<?= View::e($input['letter_number'] ?? '') ?>" maxlength="100"></label>
-            <label>Room<input name="room" value="<?= View::e($input['room'] ?? '') ?>" maxlength="100" autocomplete="off"></label>
+            <label>Ruangan *<input name="room" value="<?= View::e($input['room'] ?? '') ?>" maxlength="100" autocomplete="off" required></label>
             <label>Kondisi/catatan singkat<input name="condition_note" value="<?= View::e($input['condition_note'] ?? '') ?>" maxlength="500"></label>
             <label class="field-wide">Keperluan pemeriksaan<input name="purpose" value="<?= View::e($input['purpose'] ?? '') ?>" maxlength="255"></label>
         </div>
@@ -44,8 +44,9 @@ foreach (is_array($input['panel_codes'] ?? null) ? $input['panel_codes'] : [] as
                         <span>Selalu disertakan</span>
                     </div>
                 <?php else: ?>
+                    <?php $canSelectPanel = empty($panel['required_sex']) || ($patient['sex'] ?? null) === $panel['required_sex']; ?>
                     <label class="panel-choice">
-                        <input type="checkbox" name="panel_codes[]" value="<?= View::e($panel['code']) ?>" <?= isset($selectedPanelCodes[$panel['code']]) ? 'checked' : '' ?>>
+                        <input type="checkbox" name="panel_codes[]" value="<?= View::e($panel['code']) ?>" data-sex-eligible="<?= $canSelectPanel ? '1' : '0' ?>" <?= $canSelectPanel && isset($selectedPanelCodes[$panel['code']]) ? 'checked' : '' ?> <?= $canSelectPanel ? '' : 'disabled' ?>>
                         <span><strong><?= View::e($panel['name']) ?></strong><small><?= View::e($panel['description'] ?: 'Pemeriksaan laboratorium.') ?></small></span>
                     </label>
                 <?php endif; ?>
@@ -65,7 +66,7 @@ foreach (is_array($input['panel_codes'] ?? null) ? $input['panel_codes'] : [] as
     const update = () => {
         const usesPanels = type.value === 'mcu_general';
         panelSelection.hidden = !usesPanels;
-        panelSelection.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.disabled = !usesPanels; });
+        panelSelection.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.disabled = !usesPanels || input.dataset.sexEligible === '0'; });
     };
     type.addEventListener('change', update);
     update();

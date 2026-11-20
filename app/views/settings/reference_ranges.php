@@ -39,11 +39,13 @@ $ageText = static function (array $range): string {
     return View::formatNumber((string) $minimum) . '–' . View::formatNumber((string) $maximum) . ' hari';
 };
 $approvedRanges = array_values(array_filter($ranges, static fn (array $range): bool => $range['approval_status'] === 'approved'));
+$hasAncReferences = array_filter($approvedRanges, static fn (array $range): bool => str_starts_with((string) $range['test_code'], 'ANC_')) !== [];
 ?>
 <section class="page-heading">
     <p class="eyebrow">Pengaturan klinis</p>
     <h1>Konfigurasi nilai rujukan</h1>
     <p>Buat aturan berdasarkan parameter, jenis kelamin, dan usia pasien. Aturan yang disimpan langsung digunakan untuk menilai hasil baru.</p>
+    <?php if ($hasAncReferences): ?><nav class="section-nav" aria-label="Rujukan ANC"><a href="#reference-anc">Lihat rujukan ANC ibu hamil · khusus perempuan</a></nav><?php endif; ?>
 </section>
 
 <div class="notice reference-clinical-notice"><strong>Batas tanggung jawab:</strong> aplikasi memvalidasi format, overlap, umur, jenis kelamin, dan versi. Angka atau nilai normal tetap harus berasal dari serta disetujui tenaga klinis yang berwenang.</div>
@@ -62,7 +64,7 @@ $approvedRanges = array_values(array_filter($ranges, static fn (array $range): b
                         <?php foreach ($catalogGroups as $panelName => $tests): ?>
                             <div class="parameter-suggestion-group" role="presentation"><?= View::e($panelName) ?></div>
                             <?php foreach ($tests as $code => $test): ?>
-                                <button type="button" class="parameter-suggestion" role="option" data-code="<?= View::e($code) ?>" data-label="<?= View::e($test['label']) ?>" data-kind="<?= View::e($test['kind']) ?>" data-unit="<?= View::e($test['unit'] ?? '') ?>">
+                                <button type="button" class="parameter-suggestion" role="option" data-code="<?= View::e($code) ?>" data-label="<?= View::e($test['label']) ?>" data-kind="<?= View::e($test['kind']) ?>" data-unit="<?= View::e($test['unit'] ?? '') ?>" data-required-sex="<?= View::e($test['required_sex'] ?? '') ?>">
                                     <strong><?= View::e($test['label']) ?></strong>
                                     <small><?= $test['kind'] === 'numeric' ? 'Numerik' : 'Kualitatif' ?></small>
                                 </button>
@@ -112,6 +114,7 @@ $approvedRanges = array_values(array_filter($ranges, static fn (array $range): b
     const parameterCode = document.querySelector('#reference-parameter-code');
     const parameterSuggestions = document.querySelector('#reference-parameter-suggestions');
     const unit = document.querySelector('input[name="unit"]');
+    const sex = form?.querySelector('select[name="sex"]');
     let suggestedUnit = '';
     const options = parameterSuggestions ? Array.from(parameterSuggestions.querySelectorAll('.parameter-suggestion')) : [];
 
@@ -133,6 +136,13 @@ $approvedRanges = array_values(array_filter($ranges, static fn (array $range): b
         parameterCode.value = option.dataset.code || '';
         parameterSearch.setCustomValidity('');
         const kind = option.dataset.kind || 'numeric';
+        if (sex) {
+            const requiredSex = option.dataset.requiredSex || '';
+            Array.from(sex.options).forEach(function (item) {
+                item.disabled = requiredSex !== '' && item.value !== requiredSex;
+            });
+            if (requiredSex) sex.value = requiredSex;
+        }
         document.querySelectorAll('[data-reference-kind]').forEach(function (field) {
             const active = field.dataset.referenceKind === kind;
             field.hidden = !active;
@@ -230,7 +240,7 @@ $approvedRanges = array_values(array_filter($ranges, static fn (array $range): b
         <p class="help-text reference-history-intro">Versi aktif dipakai untuk pemeriksaan baru. Versi arsip tetap disimpan agar hasil lama dan jejak persetujuan dapat ditelusuri.</p>
         <div class="reference-history-accordion">
             <?php foreach ($historyPanels as $panelName => $panelGroups): ?>
-                <details class="reference-history-group">
+                <details class="reference-history-group"<?= $panelName === 'ANC ibu hamil' ? ' id="reference-anc" open' : '' ?>>
                     <summary><span><?= View::e(mb_strtoupper((string) $panelName)) ?></span><small><?= count($panelGroups) ?> parameter</small></summary>
                     <div class="table-wrap reference-history-wrap">
                         <table class="reference-history-table">

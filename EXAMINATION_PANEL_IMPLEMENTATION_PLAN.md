@@ -9,7 +9,7 @@ Mengurangi form yang terlalu panjang dengan menampilkan parameter berdasarkan pa
 ## 2. Keputusan rancangan
 
 1. Data pasien/rekam medis hanya menyimpan identitas pasien. Pasien **tidak** memiliki kategori pemeriksaan permanen.
-2. Panel dipilih setelah menekan **Pemeriksaan baru**, bersamaan dengan nomor lab dan tanggal pemeriksaan.
+2. Panel dipilih setelah menekan **Pemeriksaan baru**, bersamaan dengan nomor lab dan tanggal pemeriksaan. Nomor lab otomatis memakai format `YYMMDDNNNN` dan tetap dapat dikoreksi manual.
 3. Satu nomor lab dapat memuat **lebih dari satu panel** bila dikerjakan pada kunjungan yang sama, misalnya DL + Urine Lengkap + Kimia Klinik.
 4. Hanya panel terpilih yang ditampilkan pada form input dan cetakan A4.
 5. Panel **Imunoserologi** adalah pengecualian: tampil pada semua kondisi/panel, baik saat input maupun cetak, sesuai arahan klinik.

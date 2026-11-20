@@ -39,6 +39,13 @@ final class HistoricalReferenceEvaluator
             $ageYears = self::age($birthDate, (string) $examination['examined_on'], 'years');
 
             foreach ($results[$examinationId] as $code => $result) {
+                if (!ReferenceEvaluator::requiresReference($code)) {
+                    $results[$examinationId][$code]['interpretation'] = 'not_assessed';
+                    $results[$examinationId][$code]['reference_text'] = '';
+                    $results[$examinationId][$code]['reference_range_id'] = null;
+                    $results[$examinationId][$code]['unassessed_reason'] = 'not_applicable';
+                    continue;
+                }
                 $range = isset($ranges[$code])
                     ? self::applicableRange($ranges[$code], $sex, $ageDays, $ageYears)
                     : null;
@@ -98,10 +105,6 @@ final class HistoricalReferenceEvaluator
         }
 
         $ranges = self::currentRanges($pdo, array_keys($codesNeedingRanges));
-        if ($ranges === []) {
-            return $results;
-        }
-
         foreach ($examinations as $examination) {
             $examinationId = $examination['id'];
             if (!isset($results[$examinationId])) {
@@ -112,6 +115,13 @@ final class HistoricalReferenceEvaluator
             $ageYears = self::age($patient['birth_date'], $examination['examined_on'], 'years');
 
             foreach ($results[$examinationId] as $code => $result) {
+                if (!ReferenceEvaluator::requiresReference($code)) {
+                    $results[$examinationId][$code]['interpretation'] = 'not_assessed';
+                    $results[$examinationId][$code]['reference_text'] = '';
+                    $results[$examinationId][$code]['reference_range_id'] = null;
+                    $results[$examinationId][$code]['unassessed_reason'] = 'not_applicable';
+                    continue;
+                }
                 if (!isset($ranges[$code])) {
                     continue;
                 }

@@ -4,6 +4,8 @@
     <p>Isi nomor rekam medis secara manual. Nomor yang sudah terdaftar tidak dapat digunakan kembali.</p>
 </section>
 
+<?php $birthDateInput = (string) ($input['birth_date'] ?? ''); ?>
+
 <?php if (!empty($errors['form'])): ?><div class="notice notice-error"><?= View::e($errors['form']) ?></div><?php endif; ?>
 <form method="post" action="/patients" class="data-form">
     <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
@@ -16,7 +18,13 @@
             </div>
             <label class="field-wide">Nama lengkap *<input name="full_name" value="<?= View::e($input['full_name'] ?? '') ?>" required maxlength="150"></label>
             <label>Tempat lahir<input name="birth_place" value="<?= View::e($input['birth_place'] ?? '') ?>" maxlength="100"></label>
-            <label>Tanggal lahir<input name="birth_date" type="date" value="<?= View::e($input['birth_date'] ?? '') ?>"></label>
+            <label>Tanggal lahir
+                <span class="date-entry" data-date-paste>
+                    <input data-date-input name="birth_date" type="text" inputmode="numeric" placeholder="DD-MM-YYYY" value="<?= View::e(View::formatDateForInput($birthDateInput)) ?>" autocomplete="bday" aria-describedby="birth-date-help">
+                    <input data-date-picker type="date" value="" aria-label="Pilih tanggal lahir">
+                </span>
+                <small id="birth-date-help">Bisa ketik atau paste dari aplikasi lain, contoh: 30-12-2022.</small>
+            </label>
             <label>Jenis kelamin
                 <select name="sex"><option value="">Pilih</option><option value="L" <?= ($input['sex'] ?? '') === 'L' ? 'selected' : '' ?>>Laki-laki</option><option value="P" <?= ($input['sex'] ?? '') === 'P' ? 'selected' : '' ?>>Perempuan</option></select>
             </label>

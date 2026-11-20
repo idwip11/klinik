@@ -254,8 +254,11 @@ final class CumulativeResultRepository
     /** @param array{from:string,to:string,category:string,limit:?int} $filters @return list<array<string,mixed>> */
     private static function examinations(PDO $pdo, int $patientId, array $filters): array
     {
-        $where = ['e.patient_id = :patient_id'];
-        $parameters = ['patient_id' => $patientId];
+        $where = ['e.patient_id = :patient_id', 'e.examined_on >= :retention_start'];
+        $parameters = [
+            'patient_id' => $patientId,
+            'retention_start' => ExaminationRepository::DATA_RETENTION_START,
+        ];
         if ($filters['from'] !== '') {
             $where[] = 'e.examined_on >= :from_date';
             $parameters['from_date'] = $filters['from'];

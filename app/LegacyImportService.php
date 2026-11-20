@@ -89,6 +89,19 @@ final class LegacyImportService
                     continue;
                 }
 
+                $examinedOn = (string) ($mapped['examination']['examined_on'] ?? '');
+                if ($examinedOn < ExaminationRepository::DATA_RETENTION_START) {
+                    $summary['skipped_rows']++;
+                    $summary['warning_count']++;
+                    $issue = [
+                        'field' => 'tanggal periksa',
+                        'code' => 'before_retention_cutoff',
+                        'message' => 'Pemeriksaan sebelum 01/01/2026 tidak diimpor.',
+                    ];
+                    $this->captureIssue($summary, $batchId, $rowNumber, 'warning', $issue, $fingerprint);
+                    continue;
+                }
+
                 $summary['valid_rows']++;
                 if ($dryRun) {
                     continue;
@@ -299,10 +312,10 @@ final class LegacyImportService
             $exam = $mapped['examination'];
             $statement = $this->pdo->prepare(
                 'INSERT INTO examinations
-                    (patient_id, lab_number, examination_type, status, examined_on, examined_time, condition_note, letter_number, purpose,
+                    (patient_id, lab_number, examination_type, status, examined_on, result_date, examined_time, condition_note, letter_number, purpose,
                      import_batch_id, source_sheet, source_row_number, legacy_source_key, created_by, updated_by, created_at, updated_at)
                  VALUES
-                    (:patient_id, :lab_number, :examination_type, \'draft\', :examined_on, :examined_time, :condition_note, :letter_number, :purpose,
+                    (:patient_id, :lab_number, :examination_type, \'draft\', :examined_on, :result_date, :examined_time, :condition_note, :letter_number, :purpose,
                      :batch_id, :source_sheet, :source_row_number, :legacy_key, :created_by, :updated_by, UTC_TIMESTAMP(), UTC_TIMESTAMP())'
             );
             $statement->execute([
@@ -310,6 +323,7 @@ final class LegacyImportService
                 'lab_number' => $exam['lab_number'],
                 'examination_type' => $exam['examination_type'],
                 'examined_on' => $exam['examined_on'],
+                'result_date' => $exam['examined_on'],
                 'examined_time' => $exam['examined_time'],
                 'condition_note' => $exam['condition_note'],
                 'letter_number' => $exam['letter_number'],

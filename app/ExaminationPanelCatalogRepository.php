@@ -13,7 +13,7 @@ final class ExaminationPanelCatalogRepository
         $parameterActiveClause = $includeInactive ? '' : ' AND tp.is_active = 1';
         $statement = Database::connection()->query(
             'SELECT p.id AS panel_id, p.code AS panel_code, p.name AS panel_name,
-                    p.description, p.is_always_included, p.is_active AS panel_is_active,
+                    p.description, p.is_always_included, p.required_sex, p.is_active AS panel_is_active,
                     p.display_order AS panel_display_order,
                     tp.id AS parameter_id, tp.code AS parameter_code, tp.label AS parameter_label,
                     tp.subsection, tp.result_type, tp.unit, tp.options_json, tp.legacy_field,
@@ -35,6 +35,7 @@ final class ExaminationPanelCatalogRepository
                     'name' => $row['panel_name'],
                     'description' => $row['description'],
                     'is_always_included' => (bool) $row['is_always_included'],
+                    'required_sex' => $row['required_sex'],
                     'is_active' => (bool) $row['panel_is_active'],
                     'display_order' => (int) $row['panel_display_order'],
                     'parameters' => [],
@@ -75,7 +76,7 @@ final class ExaminationPanelCatalogRepository
      *
      * @return list<array{id:int,code:string,name:string,is_auto_included:bool}>
      */
-    public static function selectionFromInput(mixed $rawCodes, ?PDO $pdo = null): array
+    public static function selectionFromInput(mixed $rawCodes, ?PDO $pdo = null, ?string $sex = null): array
     {
         $requestedCodes = [];
         foreach (is_array($rawCodes) ? $rawCodes : [] as $rawCode) {
@@ -90,7 +91,7 @@ final class ExaminationPanelCatalogRepository
 
         $pdo ??= Database::connection();
         $rows = $pdo->query(
-            'SELECT id, code, name, is_always_included
+            'SELECT id, code, name, is_always_included, required_sex
              FROM examination_panels
              WHERE is_active = 1
              ORDER BY display_order, id'
@@ -113,6 +114,7 @@ final class ExaminationPanelCatalogRepository
             if (!$isAlwaysIncluded && !$isRequested) {
                 continue;
             }
+            self::assertPatientSex([$row], $sex);
             if (!$isAlwaysIncluded) {
                 $manualCount++;
             }
@@ -125,10 +127,21 @@ final class ExaminationPanelCatalogRepository
         }
 
         if ($manualCount === 0) {
-            throw new ValidationException(['panel_codes' => 'Pilih minimal satu panel pemeriksaan. Imunoserologi ditambahkan otomatis.']);
+            throw new ValidationException(['panel_codes' => 'Pilih minimal satu panel pemeriksaan. Widal ditambahkan otomatis.']);
         }
 
         return $selections;
+    }
+
+    /** @param list<array<string,mixed>> $panels */
+    public static function assertPatientSex(array $panels, ?string $sex): void
+    {
+        foreach ($panels as $panel) {
+            if (!empty($panel['required_sex']) && $panel['required_sex'] !== $sex) {
+                $label = $panel['required_sex'] === 'P' ? 'perempuan' : 'laki-laki';
+                throw new ValidationException(['panel_codes' => 'Panel ' . $panel['name'] . ' hanya tersedia untuk pasien ' . $label . '. Lengkapi jenis kelamin pasien terlebih dahulu.']);
+            }
+        }
     }
 
     /** @param list<array{id:int,code:string,name:string,is_auto_included:bool}> $selections */
@@ -171,21 +184,25 @@ final class ExaminationPanelCatalogRepository
         );
     }
 
-    /** @return list<array<string,mixed>> */
+    /** Automatic-inclusion badges follow the saved selection, not today's catalog.
+     * @return list<array<string,mixed>>
+     */
     public static function formForExamination(int $examinationId): array
     {
         $statement = Database::connection()->prepare(
             'SELECT p.id AS panel_id, p.code AS panel_code, p.name AS panel_name, p.description,
-                    p.is_always_included, p.display_order AS panel_display_order,
+                    s.is_auto_included AS is_always_included, p.required_sex, p.display_order AS panel_display_order,
                     tp.id AS parameter_id, tp.code AS parameter_code, tp.label AS parameter_label,
                     tp.subsection, tp.result_type, tp.unit, tp.options_json, tp.legacy_field,
                     tp.is_required, tp.print_when_empty, tp.display_order AS parameter_display_order,
-                    r.value_numeric, r.value_text
+                    r.value_numeric, r.value_text,
+                    w.widal_o, w.widal_ao, w.widal_bo, w.widal_h
              FROM examination_panel_selections s
              INNER JOIN examination_panels p ON p.id = s.panel_id AND p.is_active = 1
              INNER JOIN test_parameters tp ON tp.panel_id = p.id AND tp.is_active = 1
              LEFT JOIN examination_parameter_results r
                     ON r.examination_id = s.examination_id AND r.parameter_id = tp.id
+             LEFT JOIN widal_results w ON w.examination_id = s.examination_id
              WHERE s.examination_id = :examination_id
              ORDER BY p.display_order, p.id, tp.display_order, tp.id'
         );
@@ -201,6 +218,7 @@ final class ExaminationPanelCatalogRepository
                     'name' => (string) $row['panel_name'],
                     'description' => $row['description'],
                     'is_always_included' => (bool) $row['is_always_included'],
+                    'required_sex' => $row['required_sex'],
                     'display_order' => (int) $row['panel_display_order'],
                     'parameters' => [],
                 ];
@@ -217,6 +235,10 @@ final class ExaminationPanelCatalogRepository
                 $value = $value === '' ? '0' : $value;
             } elseif ($row['value_text'] !== null) {
                 $value = (string) $row['value_text'];
+            }
+            $widalField = WidalResultOptions::FIELDS[$row['parameter_code']] ?? null;
+            if ($value === null && $widalField !== null && $row[$widalField] !== null) {
+                $value = (string) $row[$widalField];
             }
 
             $panels[$panelId]['parameters'][] = [

@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 final class ReferenceEvaluator
 {
+    public static function requiresReference(string $code): bool
+    {
+        return !in_array($code, ['BLOOD_GROUP', 'RHESUS', 'ANC_BLOOD_GROUP'], true);
+    }
+
     /** @param array<string, mixed> $examination @return list<array<string, mixed>> */
     public static function evaluate(array $examination): array
     {
@@ -53,7 +58,7 @@ final class ReferenceEvaluator
             $flags[] = [
                 'test_code' => (string) $result['code'],
                 'display_name' => (string) $result['label'],
-                'section' => $result['panel_code'] === 'urinalysis_complete' ? 'urine' : 'blood',
+                'section' => $result['panel_code'] === 'urinalysis_complete' || str_starts_with((string) $result['code'], 'ANC_URINE_') ? 'urine' : 'blood',
                 'raw_value' => (string) $result['value'],
                 'unit' => $range === false ? $result['unit'] : $range['unit'],
                 'reference_range_id' => $range === false ? null : (int) $range['id'],
@@ -222,7 +227,7 @@ final class ReferenceEvaluator
         return View::formatNumber($value);
     }
 
-    private static function ageDays(mixed $birthDate, mixed $examinedOn): ?int
+    public static function ageDays(mixed $birthDate, mixed $examinedOn): ?int
     {
         if (!$birthDate || !$examinedOn) {
             return null;
@@ -240,7 +245,7 @@ final class ReferenceEvaluator
         return (int) $birth->diff($exam)->days;
     }
 
-    private static function ageYears(mixed $birthDate, mixed $examinedOn): ?int
+    public static function ageYears(mixed $birthDate, mixed $examinedOn): ?int
     {
         if (!$birthDate || !$examinedOn) {
             return null;
@@ -256,5 +261,77 @@ final class ReferenceEvaluator
         }
 
         return (int) $birth->diff($exam)->y;
+    }
+
+    public static function placeholderForTestCode(string $testCode, ?string $sex = null, ?int $ageDays = null, ?int $ageYears = null): ?string
+    {
+        static $curated = [
+            'RBC' => '4,5',
+            'MCV' => '82,6',
+            'MCH' => '30,2',
+            'MCHC' => '36,6',
+            'URINE_SG' => '1,015',
+            'URINE_PH' => '6,0',
+            'EOSINOPHIL' => '2',
+            'BASOPHIL' => '0',
+            'SGOT' => '20',
+            'SGPT' => '20',
+            'GDS' => '100',
+            'CHOL' => '170',
+            'GLUCOSE_2H_PP' => '110',
+            'CREATININE' => '0,8',
+            'HBSAG_ECLIA' => '0,10',
+            'TRIGLYCERIDES' => '120',
+            'HDL' => '50',
+            'LDL' => '90',
+            'HBA1C' => '5,4',
+            'MALARIA_RAPID' => 'Negatif',
+            'MALARIA_PAN' => 'Negatif',
+            'MALARIA_PF' => 'Negatif',
+        ];
+
+        if (isset($curated[$testCode])) {
+            return 'Contoh: ' . $curated[$testCode];
+        }
+
+        $range = ReferenceRangeRepository::findApplicable($testCode, $sex, $ageDays, $ageYears);
+        if ($range === false && $sex !== null) {
+            $range = ReferenceRangeRepository::findApplicable($testCode, null, $ageDays, $ageYears);
+            if ($range === false) {
+                $range = ReferenceRangeRepository::findApplicable($testCode, $sex === 'P' ? 'L' : 'P', $ageDays, $ageYears);
+            }
+        }
+
+        if ($range === false) {
+            return null;
+        }
+
+        if ($range['result_kind'] === 'qualitative') {
+            $normals = json_decode((string) ($range['normal_values'] ?? '[]'), true);
+            if (is_array($normals) && isset($normals[0]) && trim((string) $normals[0]) !== '') {
+                return 'Contoh: ' . trim((string) $normals[0]);
+            }
+            return null;
+        }
+
+        if ($range['lower_bound'] !== null) {
+            $lower = (float) $range['lower_bound'];
+            if ($lower > 0) {
+                return 'Contoh: ' . View::formatNumber($range['lower_bound']);
+            }
+            if ($range['upper_bound'] !== null) {
+                $upper = (float) $range['upper_bound'];
+                $mid = ($lower + $upper) / 2;
+                return 'Contoh: ' . View::formatNumber((string) round($mid));
+            }
+        }
+
+        if ($range['upper_bound'] !== null) {
+            $upper = (float) $range['upper_bound'];
+            $safe = $upper * 0.75;
+            return 'Contoh: ' . View::formatNumber((string) round($safe));
+        }
+
+        return null;
     }
 }

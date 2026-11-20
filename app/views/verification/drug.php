@@ -14,6 +14,7 @@ $drugRows = [
     ['code' => 'DRUG_BENZODIAZEPINE', 'field' => 'drug_benzodiazepine', 'label' => 'Benzodiazepine'],
     ['code' => 'DRUG_COCAINE', 'field' => 'drug_cocaine', 'label' => 'Cocaine'],
 ];
+$resultDate = ($examination['result_date'] ?? null) ?: $examination['examined_on'];
 ?>
 <section class="verification-page">
     <p class="eyebrow">Dokumen elektronik</p>
@@ -25,6 +26,7 @@ $drugRows = [
             <div><dt>No. Laboratorium</dt><dd><?= View::e($examination['lab_number']) ?></dd></div>
             <div><dt>Nama pasien</dt><dd><?= View::e($examination['full_name']) ?></dd></div>
             <div><dt>Tanggal pemeriksaan</dt><dd><?= View::e(View::formatDate($examination['examined_on'])) ?></dd></div>
+            <div><dt>Tanggal hasil</dt><dd><?= View::e(View::formatDate($resultDate)) ?></dd></div>
             <div><dt>Status dokumen</dt><dd><?= View::e($statusLabels[$examination['status']] ?? 'Tersimpan') ?></dd></div>
         </dl>
 

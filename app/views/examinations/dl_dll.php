@@ -1,6 +1,6 @@
 <?php
 $sexLabels = ['L' => 'Laki-laki', 'P' => 'Perempuan'];
-$referenceNotApplicableCodes = ['BLOOD_GROUP', 'RHESUS'];
+$referenceNotApplicableCodes = ['BLOOD_GROUP', 'RHESUS', 'ANC_BLOOD_GROUP'];
 $allFlagsByCode = [];
 $flagsByCode = [];
 foreach ($flags as $flag) {
@@ -10,11 +10,11 @@ foreach ($flags as $flag) {
     }
 }
 $hematologyRows = [
-    ['code' => 'HGB', 'field' => 'hgb', 'label' => 'Hemoglobin', 'unit' => 'g/dL'],
-    ['code' => 'WBC', 'field' => 'wbc', 'label' => 'Leukosit', 'unit' => 'sel/mm³'],
-    ['code' => 'PLT', 'field' => 'plt', 'label' => 'Trombosit', 'unit' => 'sel/mm³'],
-    ['code' => 'RBC', 'field' => 'rbc', 'label' => 'Eritrosit', 'unit' => 'juta/µL'],
-    ['code' => 'HCT', 'field' => 'hct', 'label' => 'Hematokrit', 'unit' => '%'],
+    ['code' => 'HGB', 'field' => 'hgb', 'label' => 'Hemoglobin (HGB)', 'unit' => 'g/dL'],
+    ['code' => 'HCT', 'field' => 'hct', 'label' => 'Hematokrit (HCT)', 'unit' => '%'],
+    ['code' => 'RBC', 'field' => 'rbc', 'label' => 'Eritrosit (RBC)', 'unit' => 'juta/µL'],
+    ['code' => 'WBC', 'field' => 'wbc', 'label' => 'Leukosit (WBC)', 'unit' => 'sel/mm³'],
+    ['code' => 'PLT', 'field' => 'plt', 'label' => 'Trombosit (PLT)', 'unit' => 'sel/mm³'],
 ];
 $threePartDifferentialRows = [
     ['code' => 'LYMPH_PCT', 'field' => 'lymph_pct', 'label' => 'LYMPH%', 'unit' => '%'],
@@ -87,6 +87,7 @@ $hasRows = static function (array $rows) use ($flagsByCode, $examination): bool 
     }
     return false;
 };
+$resultDate = ($examination['result_date'] ?? null) ?: $examination['examined_on'];
 $renderRows = static function (array $rows) use ($flagsByCode, $examination, $interpretationLabels, $interpretationSymbols): void {
     foreach ($rows as $row) {
         $flag = $flagsByCode[$row['code']] ?? null;
@@ -157,10 +158,14 @@ $renderAdditionalPanelRows = static function (array $panel) use ($allFlagsByCode
 ?>
 <div class="no-print preview-toolbar">
     <a href="/patients/<?= View::e($examination['patient_id']) ?>">← Kembali ke data pasien</a>
-    <form method="post" action="/examinations/<?= View::e($examination['id']) ?>/dl-dll/print" class="inline-form">
-        <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
-        <button type="submit">Cetak A4</button>
-    </form>
+    <div class="preview-toolbar-actions">
+        <a class="button-link button-secondary" href="/examinations/<?= View::e($examination['id']) ?>/dl-dll/excel">⬇ Download Excel</a>
+        <a class="button-link button-secondary" href="/examinations/<?= View::e($examination['id']) ?>/dl-dll/pdf">⬇ Download PDF</a>
+        <form method="post" action="/examinations/<?= View::e($examination['id']) ?>/dl-dll/print" class="inline-form">
+            <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
+            <button type="submit">Cetak A4</button>
+        </form>
+    </div>
 </div>
 
 <div class="dl-dll-sheets">
@@ -169,16 +174,7 @@ $renderAdditionalPanelRows = static function (array $panel) use ($allFlagsByCode
         <img class="dl-dll-header-image" src="/assets/header-basmalah.png" alt="Klinik Rawat Inap Basmalah Medika — Laboratorium Klinik">
     </header>
 
-    <dl class="patient-summary dl-dll-patient">
-        <div><dt>No. RM</dt><dd><?= View::e($examination['medical_record_number']) ?></dd></div>
-        <div><dt>No. Laboratorium</dt><dd><?= View::e($examination['lab_number']) ?></dd></div>
-        <div><dt>Nama pasien</dt><dd><?= View::e($examination['full_name']) ?></dd></div>
-        <div><dt>Jenis kelamin</dt><dd><?= View::e($sexLabels[$examination['sex']] ?? ($examination['sex'] ?: '—')) ?></dd></div>
-        <div><dt>Tempat, tanggal lahir</dt><dd><?= View::e(trim(($examination['birth_place'] ?? '') . (($examination['birth_place'] ?? '') && ($examination['birth_date'] ?? '') ? ', ' : '') . View::formatDate($examination['birth_date'] ?? null)) ?: '—') ?></dd></div>
-        <div><dt>Tanggal periksa</dt><dd><?= View::e(View::formatDate($examination['examined_on'])) ?></dd></div>
-        <div><dt>Room</dt><dd><?= View::e(($examination['room'] ?? null) ?: '—') ?></dd></div>
-        <div class="patient-summary-wide"><dt>Alamat</dt><dd><?= View::e($examination['address'] ?: '—') ?></dd></div>
-    </dl>
+    <?php require ROOT_PATH . '/app/views/examinations/patient_identity.php'; ?>
 
     <table class="print-table dl-dll-table">
         <thead>
@@ -215,7 +211,7 @@ $renderAdditionalPanelRows = static function (array $panel) use ($allFlagsByCode
 
     <footer class="print-footer dl-dll-footer">
         <p><em>*Kesimpulan di atas ini hanya berdasarkan dari pemeriksaan laboratorium pada saat ini dan dari keterangan klinis yang dicantumkan.</em></p>
-        <div class="signature-block"><span>Malang, ........................</span><span class="signature-line">&nbsp;</span></div>
+        <div class="signature-block"><span>Malang, <?= View::e(View::formatLongDate($resultDate)) ?></span><span class="signature-line">&nbsp;</span></div>
     </footer>
 </article>
 </div>

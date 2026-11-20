@@ -5,6 +5,7 @@ declare(strict_types=1);
 final class AnalyticsRepository
 {
     public const EMPTY_INSURANCE = '__empty__';
+    private const DATA_RETENTION_START = ExaminationRepository::DATA_RETENTION_START;
 
     /**
      * @param array<string,mixed> $input
@@ -104,14 +105,18 @@ final class AnalyticsRepository
             'qualitative_abnormal_results' => 0,
             'abnormal_results' => 0,
             'not_assessed_results' => 0,
+            'not_applicable_results' => 0,
             'parameters_without_reference' => 0,
         ];
         $parameterRows = [];
         foreach ($results as $resultSet) {
             foreach ($resultSet as $code => $result) {
                 $interpretation = (string) ($result['interpretation'] ?? 'not_assessed');
+                $notApplicable = ($result['unassessed_reason'] ?? null) === 'not_applicable';
                 $totals['total_results']++;
-                if ($interpretation === 'not_assessed') {
+                if ($notApplicable) {
+                    $totals['not_applicable_results']++;
+                } elseif ($interpretation === 'not_assessed') {
                     $totals['not_assessed_results']++;
                     if (($result['unassessed_reason'] ?? null) === 'no_active_reference') {
                         $totals['parameters_without_reference']++;
@@ -145,12 +150,15 @@ final class AnalyticsRepository
                         'high_results' => 0,
                         'qualitative_abnormal_results' => 0,
                         'not_assessed_results' => 0,
+                        'not_applicable_results' => 0,
                         'abnormal_results' => 0,
                         'abnormal_percentage' => 0.0,
                     ];
                 }
                 $parameterRows[$code]['total_results']++;
-                if ($interpretation === 'not_assessed') {
+                if ($notApplicable) {
+                    $parameterRows[$code]['not_applicable_results']++;
+                } elseif ($interpretation === 'not_assessed') {
                     $parameterRows[$code]['not_assessed_results']++;
                 } else {
                     $parameterRows[$code]['assessed_results']++;
@@ -396,6 +404,10 @@ final class AnalyticsRepository
                      WHEN r.value_numeric IS NOT NULL OR NULLIF(TRIM(r.value_text), "") IS NOT NULL THEN tp.id
                      ELSE NULL
                  END)
+                 AND (MAX(s.is_auto_included) = 0 OR COUNT(DISTINCT CASE
+                     WHEN r.value_numeric IS NOT NULL OR NULLIF(TRIM(r.value_text), "") IS NOT NULL THEN tp.id
+                     ELSE NULL
+                 END) > 0)
              ) incomplete_panels'
         );
         $statement->execute($parameters);
@@ -780,6 +792,12 @@ final class AnalyticsRepository
         if ($dateFrom !== null && $dateTo !== null && $dateFrom > $dateTo) {
             $errors['date_range'] = 'Tanggal awal tidak boleh melewati tanggal akhir.';
         }
+        if ($dateTo !== null && $dateTo < self::DATA_RETENTION_START) {
+            $errors['date_to'] = 'Analisis hanya tersedia untuk pemeriksaan mulai 01/01/2026.';
+        }
+        if ($dateFrom !== null && $dateFrom < self::DATA_RETENTION_START) {
+            $dateFrom = self::DATA_RETENTION_START;
+        }
 
         $type = self::inputString($input['type'] ?? '');
         if ($type !== '' && !array_key_exists($type, $options['examination_types'])) {
@@ -839,10 +857,12 @@ final class AnalyticsRepository
     {
         $where = [
             'p.archived_at IS NULL',
+            'e.examined_on >= :retention_start',
             'e.examined_on >= :date_from',
             'e.examined_on <= :date_to',
         ];
         $parameters = [
+            'retention_start' => self::DATA_RETENTION_START,
             'date_from' => $filters['date_from'],
             'date_to' => $filters['date_to'],
         ];

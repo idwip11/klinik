@@ -82,7 +82,7 @@ final class PatientRepository
         }
 
         $statement = Database::connection()->prepare(
-            'SELECT id, medical_record_number, national_id, full_name, sex, insurance_type
+            'SELECT id, medical_record_number, national_id, full_name, birth_date, sex, insurance_type
              FROM patients
              WHERE archived_at IS NULL
                AND (medical_record_number LIKE :medical_record_query
@@ -161,9 +161,13 @@ final class PatientRepository
              LEFT JOIN drug_results d ON d.examination_id = e.id
              LEFT JOIN widal_results w ON w.examination_id = e.id
              WHERE e.patient_id = :patient_id
+               AND e.examined_on >= :retention_start
              ORDER BY e.examined_on DESC, e.id DESC'
         );
-        $statement->execute(['patient_id' => $patientId]);
+        $statement->execute([
+            'patient_id' => $patientId,
+            'retention_start' => ExaminationRepository::DATA_RETENTION_START,
+        ]);
         $examinations = $statement->fetchAll();
         if ($examinations === []) {
             return [];
@@ -297,6 +301,7 @@ final class PatientRepository
         AuditLogger::record('patient.updated', $userId, 'patient', $id, $before, $after === false ? $data : $after);
     }
 
+    /** @deprecated Kept only for compatibility with old records; new UI uses permanent deletion. */
     public static function archive(int $id, string $confirmationMedicalRecordNumber, int $userId): void
     {
         $before = self::requireConfirmedPatient($id, $confirmationMedicalRecordNumber);
@@ -314,6 +319,7 @@ final class PatientRepository
         AuditLogger::record('patient.archived', $userId, 'patient', $id, $before, $after === false ? $before : $after);
     }
 
+    /** @deprecated Kept only for compatibility with old records; new UI no longer offers restore. */
     public static function restore(int $id, int $userId): void
     {
         $before = self::find($id);
@@ -350,13 +356,49 @@ final class PatientRepository
             }
             self::assertMedicalRecordConfirmation($before, $confirmationMedicalRecordNumber);
 
-            $count = $pdo->prepare('SELECT COUNT(*) FROM examinations WHERE patient_id = :patient_id');
-            $count->execute(['patient_id' => $id]);
-            if ((int) $count->fetchColumn() > 0) {
-                throw new ValidationException(['form' => 'Pasien yang sudah memiliki riwayat pemeriksaan tidak dapat dihapus permanen. Arsipkan pasien ini.']);
+            $dateStatement = $pdo->prepare(
+                'SELECT DISTINCT examined_on FROM examinations WHERE patient_id = :patient_id'
+            );
+            $dateStatement->execute(['patient_id' => $id]);
+            $examinedDates = array_values(array_filter(
+                array_map(static fn (mixed $date): string => (string) $date, $dateStatement->fetchAll(PDO::FETCH_COLUMN)),
+                static fn (string $date): bool => $date !== ''
+            ));
+
+            // Some legacy foreign keys intentionally use RESTRICT (print logs and
+            // examination ownership). Remove examination dependants explicitly so
+            // a patient and the complete clinical record are deleted atomically.
+            $dependentTables = [
+                'vital_results',
+                'blood_results',
+                'urine_results',
+                'drug_results',
+                'widal_results',
+                'examination_panel_selections',
+                'examination_parameter_results',
+                'examination_result_flags',
+                'print_logs',
+            ];
+            foreach ($dependentTables as $table) {
+                $pdo->prepare(
+                    'DELETE FROM ' . $table . '
+                     WHERE examination_id IN (
+                         SELECT id FROM examinations WHERE patient_id = :patient_id
+                     )'
+                )->execute(['patient_id' => $id]);
             }
 
+            $pdo->prepare('DELETE FROM examinations WHERE patient_id = :patient_id')
+                ->execute(['patient_id' => $id]);
             $pdo->prepare('DELETE FROM patients WHERE id = :id')->execute(['id' => $id]);
+
+            // Sequence rows are derived state. Recreate them from the remaining
+            // examinations so deleting the last test for a date starts at 0001.
+            if ($examinedDates !== []) {
+                $placeholders = implode(', ', array_fill(0, count($examinedDates), '?'));
+                $pdo->prepare('DELETE FROM lab_number_sequences WHERE examined_on IN (' . $placeholders . ')')
+                    ->execute($examinedDates);
+            }
             if ($ownsTransaction) {
                 $pdo->commit();
             }
@@ -411,6 +453,10 @@ final class PatientRepository
         $value = trim((string) $value);
         if ($value === '') {
             return null;
+        }
+
+        if (preg_match('/^(\d{2})[-\/](\d{2})[-\/](\d{4})$/', $value, $matches) === 1) {
+            $value = $matches[3] . '-' . $matches[2] . '-' . $matches[1];
         }
 
         $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);

@@ -14,23 +14,12 @@ $drugRows = [
     ['code' => 'DRUG_BENZODIAZEPINE', 'field' => 'drug_benzodiazepine', 'label' => 'Benzodiazepine'],
     ['code' => 'DRUG_COCAINE', 'field' => 'drug_cocaine', 'label' => 'Cocaine'],
 ];
-$birthText = trim(($examination['birth_place'] ?? '') . (($examination['birth_place'] ?? '') && ($examination['birth_date'] ?? '') ? ', ' : '') . View::formatDate($examination['birth_date'] ?? null));
-$age = null;
-if (!empty($examination['birth_date']) && !empty($examination['examined_on'])) {
-    try {
-        $birth = new DateTimeImmutable((string) $examination['birth_date']);
-        $examined = new DateTimeImmutable((string) $examination['examined_on']);
-        $age = $examined >= $birth ? $birth->diff($examined)->y : null;
-    } catch (Throwable) {
-        $age = null;
-    }
-}
+$resultDate = ($examination['result_date'] ?? null) ?: $examination['examined_on'];
+$resultDateText = View::formatLongDate($resultDate);
 $monthNames = [
     1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni',
     7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
 ];
-$today = new DateTimeImmutable('now', new DateTimeZone('Asia/Makassar'));
-$todayText = $today->format('d') . ' ' . $monthNames[(int) $today->format('n')] . ' ' . $today->format('Y');
 $specimenTimeText = '—';
 if (!empty($examination['created_at'])) {
     try {
@@ -49,17 +38,7 @@ $verificationQrDataUri = $verificationUrl === null ? null : QrCodeService::dataU
         <img src="/assets/header-basmalah.png" alt="">
     </header>
 
-    <dl class="drug-patient-summary">
-        <div class="drug-patient-left drug-medical-record"><dt>No. RM</dt><dd><?= View::e($examination['medical_record_number']) ?></dd></div>
-        <div><dt>No. Laboratorium</dt><dd><?= View::e($examination['lab_number']) ?></dd></div>
-        <div class="drug-patient-left"><dt>Nama</dt><dd><?= View::e($examination['full_name']) ?></dd></div>
-        <div><dt>Jenis kelamin</dt><dd><?= View::e($sexLabels[$examination['sex']] ?? ($examination['sex'] ?: '—')) ?></dd></div>
-        <div class="drug-patient-left"><dt>Tempat, tanggal lahir</dt><dd><?= View::e($birthText ?: '—') ?></dd></div>
-        <div><dt>Usia</dt><dd><?= View::e($age === null ? '—' : $age . ' tahun') ?></dd></div>
-        <div class="drug-patient-left"><dt>Tanggal periksa</dt><dd><?= View::e(View::formatDate($examination['examined_on'])) ?></dd></div>
-        <div><dt>Room</dt><dd><?= View::e(($examination['room'] ?? null) ?: '—') ?></dd></div>
-        <div class="drug-patient-left drug-patient-wide"><dt>Alamat</dt><dd><?= View::e($examination['address'] ?: '—') ?></dd></div>
-    </dl>
+    <?php require ROOT_PATH . '/app/views/examinations/patient_identity.php'; ?>
 
     <table class="print-table drug-print-table">
         <thead><tr><th>Pemeriksaan</th><th>Hasil</th><th>Nilai rujukan</th></tr></thead>
@@ -99,7 +78,7 @@ $verificationQrDataUri = $verificationUrl === null ? null : QrCodeService::dataU
 
         <div class="drug-signature">
             <div class="drug-signature-block">
-                <div><?= View::e($todayText) ?></div>
+                <div><?= View::e($resultDateText) ?></div>
                 <div>Dokter Penanggung Jawab</div>
                 <span class="drug-signature-line">&nbsp;</span>
             </div>

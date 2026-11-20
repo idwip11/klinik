@@ -6,7 +6,7 @@
     </div>
     <div class="button-group">
         <a class="button-link" href="/patients/create">Pasien baru</a>
-        <?php if ((Auth::user()['role'] ?? '') === 'admin'): ?><a class="button-link button-secondary" href="/patients/archived">Arsip pasien</a><?php endif; ?>
+        <?php if ((Auth::user()['role'] ?? '') === 'admin'): ?><a class="button-link button-secondary" href="/patients/archived">Data lama</a><?php endif; ?>
     </div>
 </section>
 
@@ -46,6 +46,7 @@
         detail.textContent = [
             patient.medical_record_number ? 'No. RM ' + patient.medical_record_number : '',
             patient.national_id ? 'NIK ' + patient.national_id : '',
+            patient.birth_date ? 'Tgl lahir ' + (function (d) { var p = d.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d; })(patient.birth_date) : '',
             patient.sex === 'L' ? 'Laki-laki' : patient.sex === 'P' ? 'Perempuan' : '',
             patient.insurance_type || ''
         ].filter(Boolean).join(' · ');
@@ -101,15 +102,16 @@
     <div class="table-wrap">
         <table>
             <thead>
-            <tr><th>No. RM</th><th>Nama</th><th>NIK</th><th>L/P</th><th>Asuransi</th><th></th></tr>
+            <tr><th>No. RM</th><th>Nama</th><th>NIK</th><th>Tanggal Lahir</th><th>L/P</th><th>Asuransi</th><th></th></tr>
             </thead>
             <tbody>
             <?php foreach ($patients as $patient): ?>
                 <tr>
                     <td data-label="No. RM"><?= View::e($patient['medical_record_number']) ?></td>
                     <td data-label="Nama"><?= View::e($patient['full_name']) ?></td>
-                    <td data-label="NIK"><?= View::e($patient['national_id']) ?></td>
-                    <td data-label="L/P"><?= View::e($patient['sex']) ?></td>
+                    <td data-label="NIK"><?= View::e($patient['national_id'] ?: '—') ?></td>
+                    <td data-label="Tanggal Lahir"><?= View::e(View::formatDate($patient['birth_date']) ?: '—') ?></td>
+                    <td data-label="L/P"><?= View::e($patient['sex'] ?: '—') ?></td>
                     <td data-label="Asuransi"><?= View::e($patient['insurance_type'] ?: '—') ?></td>
                     <td data-label="Aksi">
                         <a href="/patients/<?= View::e($patient['id']) ?>">Lihat data</a>

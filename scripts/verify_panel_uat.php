@@ -26,21 +26,23 @@ if ($patientId < 1 || $userId < 1) {
             'updated_by' => $userId,
         ]);
         $examinationId = (int) $pdo->lastInsertId();
-        $selections = ExaminationPanelCatalogRepository::selectionFromInput(['hematology_complete', 'urinalysis_complete'], $pdo);
+        $selections = ExaminationPanelCatalogRepository::selectionFromInput(['hematology_complete', 'urinalysis_complete', 'immunoserology'], $pdo);
         ExaminationPanelCatalogRepository::storeSelections($pdo, $examinationId, $selections);
         $form = ExaminationPanelCatalogRepository::formForExamination($examinationId);
         $formCodes = array_column($form, 'code');
-        if ($formCodes !== ['hematology_complete', 'urinalysis_complete', 'immunoserology']) {
-            $failures[] = 'UAT multi-panel tidak menambahkan Imunoserologi secara otomatis.';
+        if ($formCodes !== ['hematology_complete', 'urinalysis_complete', 'widal', 'immunoserology']) {
+            $failures[] = 'UAT multi-panel tidak menambahkan Widal secara otomatis.';
         }
 
         $submitted = [
             'HGB' => '13,20',
             'URINE_COLOR' => 'Kuning muda',
             'BLOOD_GROUP' => 'O',
+            'WIDAL_O' => 'Negatif',
         ];
         $normalized = ExaminationParameterResultRepository::normalize($form, $submitted);
         ExaminationParameterResultRepository::replace($pdo, $examinationId, $normalized['rows']);
+        $form = ExaminationPanelCatalogRepository::formForExamination($examinationId);
         $examination = ExaminationRepository::find($examinationId);
         if ($examination === false) {
             $failures[] = 'Pemeriksaan sintetis tidak dapat dibaca kembali.';
@@ -67,7 +69,7 @@ if ($patientId < 1 || $userId < 1) {
         $panelForm = $form;
         include ROOT_PATH . '/app/views/examinations/panel_print.php';
         $html = (string) ob_get_clean();
-        foreach (['header-basmalah.png', 'footer-basmalah.png', 'DL / DARAH LENGKAP', 'URINE LENGKAP', 'IMUNOSEROLOGI'] as $expected) {
+        foreach (['header-basmalah.png', 'footer-basmalah.png', 'DL / DARAH LENGKAP', 'URINE LENGKAP', 'WIDAL', 'IMUNOSEROLOGI'] as $expected) {
             if (!str_contains($html, $expected)) {
                 $failures[] = 'Template cetak panel tidak memuat: ' . $expected;
             }
@@ -85,4 +87,4 @@ if ($failures !== []) {
     exit(1);
 }
 
-echo "UAT otomatis Fase 7 lulus: multi-panel, Imunoserologi otomatis, pembatasan parameter, evaluasi hasil, dan render cetak A4 terverifikasi tanpa menyisakan data sintetis.\n";
+echo "UAT otomatis Fase 7 lulus: multi-panel, Widal otomatis, pembatasan parameter, evaluasi hasil, dan render cetak A4 terverifikasi tanpa menyisakan data sintetis.\n";

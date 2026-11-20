@@ -70,11 +70,11 @@ if ($patientId < 1 || $userId < 1) {
             'updated_by' => $userId,
         ]);
         $examinationId = (int) $pdo->lastInsertId();
-        $selections = ExaminationPanelCatalogRepository::selectionFromInput(['hematology_complete', 'urinalysis_complete'], $pdo);
+        $selections = ExaminationPanelCatalogRepository::selectionFromInput(['hematology_complete', 'urinalysis_complete', 'immunoserology'], $pdo);
         ExaminationPanelCatalogRepository::storeSelections($pdo, $examinationId, $selections);
         $form = ExaminationPanelCatalogRepository::formForExamination($examinationId);
-        if (array_column($form, 'code') !== ['hematology_complete', 'urinalysis_complete', 'immunoserology']) {
-            $failures[] = 'Form dinamis tidak mengikuti panel terpilih dan Imunoserologi otomatis.';
+        if (array_column($form, 'code') !== ['hematology_complete', 'urinalysis_complete', 'widal', 'immunoserology']) {
+            $failures[] = 'Form dinamis tidak mengikuti panel terpilih dan Widal otomatis.';
         }
         $stored = ExaminationParameterResultRepository::normalize($form, [
             'HGB' => '13,2',

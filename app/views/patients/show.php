@@ -17,7 +17,7 @@ $hasExaminations = !empty($examinations);
     </div>
 </section>
 
-<?php if ($isArchived): ?><div class="notice notice-archived">Data pasien ini diarsipkan. Riwayat tetap tersedia, tetapi pasien tidak tampil pada pencarian aktif dan tidak dapat dibuatkan pemeriksaan baru.</div><?php endif; ?>
+<?php if ($isArchived): ?><div class="notice notice-archived">Data pasien ini berasal dari fitur arsip versi lama. Hapus permanen untuk menghapus identitas dan seluruh riwayat pemeriksaannya.</div><?php endif; ?>
 
 <section class="form-section patient-detail-card">
     <div class="section-heading-row">
@@ -39,27 +39,12 @@ $hasExaminations = !empty($examinations);
 <?php if ($canManagePatientRecord): ?>
     <section class="form-section patient-record-management">
         <h2>Pengelolaan data pasien</h2>
-        <?php if ($isArchived): ?>
-            <p class="help-text">Pulihkan pasien agar kembali muncul di pencarian aktif dan dapat dibuatkan pemeriksaan baru.</p>
-            <form method="post" action="/patients/<?= View::e($patient['id']) ?>/restore" class="form-actions form-actions-start">
-                <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
-                <button type="submit" class="button-secondary">Pulihkan pasien</button>
-            </form>
-        <?php elseif ($hasExaminations): ?>
-            <p class="help-text">Pasien ini memiliki riwayat pemeriksaan sehingga tidak dapat dihapus permanen. Arsipkan untuk menyembunyikannya dari pencarian aktif tanpa menghapus riwayat.</p>
-            <form method="post" action="/patients/<?= View::e($patient['id']) ?>/archive" class="record-action-form" onsubmit="return confirm('Arsipkan pasien ini? Riwayat pemeriksaan tetap tersimpan.');">
-                <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
-                <label>Ketikan No. RM untuk konfirmasi<input name="confirm_medical_record_number" required maxlength="50" autocomplete="off"></label>
-                <button type="submit" class="button-secondary">Arsipkan pasien</button>
-            </form>
-        <?php else: ?>
-            <p class="help-text">Pasien ini belum memiliki riwayat pemeriksaan. Penghapusan permanen tidak dapat dibatalkan.</p>
-            <form method="post" action="/patients/<?= View::e($patient['id']) ?>/delete" class="record-action-form" onsubmit="return confirm('Hapus permanen pasien ini? Tindakan ini tidak dapat dibatalkan.');">
-                <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
-                <label>Ketikan No. RM untuk konfirmasi<input name="confirm_medical_record_number" required maxlength="50" autocomplete="off"></label>
-                <button type="submit" class="button-danger">Hapus permanen pasien</button>
-            </form>
-        <?php endif; ?>
+        <p class="help-text">Penghapusan permanen akan menghapus identitas pasien, seluruh riwayat pemeriksaan, hasil, dan log cetak. Tindakan ini tidak dapat dibatalkan.</p>
+        <form method="post" action="/patients/<?= View::e($patient['id']) ?>/delete" class="record-action-form" onsubmit="return confirm('Hapus permanen pasien beserta seluruh riwayat pemeriksaannya? Tindakan ini tidak dapat dibatalkan.');">
+            <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
+            <label>Ketik No. RM untuk konfirmasi<input name="confirm_medical_record_number" required maxlength="50" autocomplete="off"></label>
+            <button type="submit" class="button-danger">Hapus permanen pasien</button>
+        </form>
     </section>
 <?php endif; ?>
 
@@ -78,7 +63,7 @@ $hasExaminations = !empty($examinations);
         <p class="empty-state">Belum ada pemeriksaan untuk pasien ini.</p>
     <?php else: ?>
         <div class="table-wrap">
-            <table>
+            <table class="patient-history-table">
                 <thead><tr><th>Tanggal</th><th>No. Lab</th><th>Jenis</th><th>Detail pemeriksaan</th><th>Ringkasan hasil</th><th>Status</th><th>Aksi</th></tr></thead>
                 <tbody>
                 <?php foreach ($examinations as $examination): ?>
@@ -92,7 +77,7 @@ $hasExaminations = !empty($examinations);
                                 <span class="patient-history-results-empty">Tidak ada detail tambahan.</span>
                             <?php else: ?>
                                 <dl class="patient-history-details">
-                                    <?php if (trim((string) ($examination['room'] ?? '')) !== ''): ?><div><dt>Room</dt><dd><?= View::e($examination['room']) ?></dd></div><?php endif; ?>
+                                    <?php if (trim((string) ($examination['room'] ?? '')) !== ''): ?><div><dt>Ruangan</dt><dd><?= View::e($examination['room']) ?></dd></div><?php endif; ?>
                                     <?php if (trim((string) ($examination['condition_note'] ?? '')) !== ''): ?><div><dt>Kondisi/catatan</dt><dd><?= View::e($examination['condition_note']) ?></dd></div><?php endif; ?>
                                     <?php if (trim((string) ($examination['purpose'] ?? '')) !== ''): ?><div><dt>Keperluan</dt><dd><?= View::e($examination['purpose']) ?></dd></div><?php endif; ?>
                                 </dl>
@@ -104,16 +89,30 @@ $hasExaminations = !empty($examinations);
                             <?php else: ?>
                                 <ul class="patient-history-results">
                                     <?php foreach ($examination['result_summary'] as $result): ?>
-                                        <li><strong><?= View::e($result['label']) ?>:</strong> <?= View::e($result['numeric'] ? View::formatNumber($result['value']) : $result['value']) ?></li>
+                                        <li>
+                                            <span class="patient-history-result-label"><?= View::e($result['label']) ?></span>
+                                            <strong class="patient-history-result-value"><?= View::e($result['numeric'] ? View::formatNumber($result['value']) : $result['value']) ?></strong>
+                                        </li>
                                     <?php endforeach; ?>
                                 </ul>
                             <?php endif; ?>
                         </td>
                         <td data-label="Status"><span class="status status-<?= View::e($examination['status']) ?>"><?= View::e($statusLabels[$examination['status']] ?? $examination['status']) ?></span></td>
                         <td data-label="Aksi" class="action-links">
-                            <?php if ($examination['examination_type'] === 'mcu_general'): ?><a href="/examinations/<?= View::e($examination['id']) ?>/dl-dll">Buka DL/DLL</a><?php endif; ?>
-                            <?php if ($examination['examination_type'] === 'drug_screen'): ?><a href="/examinations/<?= View::e($examination['id']) ?>/preview?type=drug_screen">Buka Skrining Narkoba</a><?php endif; ?>
-                            <a href="/examinations/<?= View::e($examination['id']) ?>">Detail</a>
+                            <?php if ($examination['examination_type'] === 'mcu_general'): ?><a href="/examinations/<?= View::e($examination['id']) ?>/dl-dll">Print Hasil</a><?php endif; ?>
+                            <?php if ($examination['examination_type'] === 'newborn_blood'): ?><a href="/examinations/<?= View::e($examination['id']) ?>/preview?type=newborn_blood">Print Hasil</a><?php endif; ?>
+                            <?php if ($examination['examination_type'] === 'drug_screen'): ?><a href="/examinations/<?= View::e($examination['id']) ?>/preview?type=drug_screen">Print Hasil</a><?php endif; ?>
+                            <a href="/examinations/<?= View::e($examination['id']) ?>">Edit Hasil</a>
+                            <?php if ($canManagePatientRecord): ?>
+                                <details class="history-delete-details">
+                                    <summary>Hapus pemeriksaan ini</summary>
+                                    <form method="post" action="/examinations/<?= View::e($examination['id']) ?>/delete" class="record-action-form" onsubmit="return confirm('Hapus pemeriksaan ini beserta seluruh hasilnya? Pastikan nomor lab yang diketik sudah benar. Tindakan ini tidak dapat dibatalkan.');">
+                                        <input type="hidden" name="_token" value="<?= View::e(Csrf::token()) ?>">
+                                        <label>Ketik No. Lab<input name="confirm_lab_number" required maxlength="50" autocomplete="off" placeholder="<?= View::e((string) $examination['lab_number']) ?>"></label>
+                                        <button type="submit" class="button-danger">Hapus pemeriksaan</button>
+                                    </form>
+                                </details>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>

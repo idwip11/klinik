@@ -2,6 +2,13 @@
 
 declare(strict_types=1);
 
+if (php_sapi_name() === 'cli-server') {
+    $requestedFile = __DIR__ . (parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '');
+    if (is_file($requestedFile)) {
+        return false;
+    }
+}
+
 require dirname(__DIR__) . '/app/bootstrap.php';
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -187,24 +194,19 @@ if (preg_match('#^/patients/(\d+)/archive$#', $path, $matches) === 1 && $method 
     ensureCsrf();
     $id = (int) $matches[1];
     try {
-        PatientRepository::archive($id, (string) ($_POST['confirm_medical_record_number'] ?? ''), (int) Auth::user()['id']);
-        Flash::set('success', 'Pasien berhasil diarsipkan. Riwayat pemeriksaan tetap tersimpan.');
+        PatientRepository::deletePermanently($id, (string) ($_POST['confirm_medical_record_number'] ?? ''), (int) Auth::user()['id']);
+        Flash::set('success', 'Pasien dan seluruh riwayat pemeriksaannya berhasil dihapus permanen.');
     } catch (ValidationException $exception) {
         Flash::set('error', firstValidationError($exception));
     }
-    Auth::redirect('/patients/' . $id);
+    Auth::redirect('/patients');
 }
 
 if (preg_match('#^/patients/(\d+)/restore$#', $path, $matches) === 1 && $method === 'POST') {
     Auth::requireRole(['admin']);
     ensureCsrf();
     $id = (int) $matches[1];
-    try {
-        PatientRepository::restore($id, (int) Auth::user()['id']);
-        Flash::set('success', 'Pasien berhasil dipulihkan dan kembali ke pencarian aktif.');
-    } catch (ValidationException $exception) {
-        Flash::set('error', firstValidationError($exception));
-    }
+    Flash::set('error', 'Fitur pemulihan pasien sudah tidak tersedia. Gunakan hapus permanen.');
     Auth::redirect('/patients/' . $id);
 }
 
@@ -214,7 +216,7 @@ if (preg_match('#^/patients/(\d+)/delete$#', $path, $matches) === 1 && $method =
     $id = (int) $matches[1];
     try {
         PatientRepository::deletePermanently($id, (string) ($_POST['confirm_medical_record_number'] ?? ''), (int) Auth::user()['id']);
-        Flash::set('success', 'Data pasien tanpa riwayat pemeriksaan telah dihapus permanen.');
+        Flash::set('success', 'Pasien dan seluruh riwayat pemeriksaannya berhasil dihapus permanen.');
         Auth::redirect('/patients');
     } catch (ValidationException $exception) {
         Flash::set('error', firstValidationError($exception));
@@ -286,7 +288,6 @@ if ($method === 'POST' && $path === '/examinations') {
         Flash::set('success', 'Pemeriksaan siap diisi.');
         Auth::redirect('/examinations/' . $id);
     } catch (ValidationException $exception) {
-        $_POST['examined_time'] = ExaminationRepository::nowInWib()->format('H:i');
         View::render('examinations/create', [
             'pageTitle' => 'Pemeriksaan baru',
             'patient' => $patient,
@@ -319,6 +320,24 @@ if (preg_match('#^/examinations/(\d+)/results$#', $path, $matches) === 1 && $met
     }
 }
 
+if (preg_match('#^/examinations/(\d+)/dates$#', $path, $matches) === 1 && $method === 'POST') {
+    Auth::requireRole(['admin', 'perawat']);
+    ensureCsrf();
+    $id = (int) $matches[1];
+    try {
+        ExaminationRepository::updateDocumentDates(
+            $id,
+            (string) ($_POST['examined_on'] ?? ''),
+            (string) ($_POST['result_date'] ?? ''),
+            (int) Auth::user()['id']
+        );
+        Flash::set('success', 'Tanggal pemeriksaan dan tanggal hasil berhasil diperbarui.');
+        Auth::redirect('/examinations/' . $id);
+    } catch (ValidationException $exception) {
+        renderExamination($id, $_POST, ['date' => firstValidationError($exception)]);
+    }
+}
+
 if (preg_match('#^/examinations/(\d+)/complete$#', $path, $matches) === 1 && $method === 'POST') {
     Auth::requireRole(['admin', 'perawat']);
     ensureCsrf();
@@ -330,6 +349,29 @@ if (preg_match('#^/examinations/(\d+)/complete$#', $path, $matches) === 1 && $me
     } catch (ValidationException $exception) {
         renderExamination($id, null, ['form' => firstValidationError($exception)]);
     }
+}
+
+if (preg_match('#^/examinations/(\d+)/delete$#', $path, $matches) === 1 && $method === 'POST') {
+    Auth::requireRole(['admin']);
+    ensureCsrf();
+    $id = (int) $matches[1];
+    $examination = ExaminationRepository::find($id);
+    $patientId = (int) ($examination['patient_id'] ?? 0);
+    if ($patientId < 1) {
+        Flash::set('error', 'Pemeriksaan tidak ditemukan.');
+        Auth::redirect('/patients');
+    }
+    try {
+        ExaminationRepository::deleteExamination(
+            $id,
+            (string) ($_POST['confirm_lab_number'] ?? ''),
+            (int) Auth::user()['id']
+        );
+        Flash::set('success', 'Pemeriksaan dan seluruh hasil terkait berhasil dihapus permanen.');
+    } catch (ValidationException $exception) {
+        Flash::set('error', firstValidationError($exception));
+    }
+    Auth::redirect('/patients/' . $patientId);
 }
 
 if ($method === 'GET' && $path === '/settings/reference-ranges') {
@@ -436,6 +478,8 @@ if ($method === 'GET' && $path === '/reports') {
         'date_from' => (string) ($_GET['date_from'] ?? ''),
         'date_to' => (string) ($_GET['date_to'] ?? ''),
         'type' => (string) ($_GET['type'] ?? ''),
+        'panel' => (string) ($_GET['panel'] ?? ''),
+        'sex' => (string) ($_GET['sex'] ?? ''),
         'insurance_type' => (string) ($_GET['insurance_type'] ?? ''),
         'status' => (string) ($_GET['status'] ?? ''),
         'q' => (string) ($_GET['q'] ?? ''),
@@ -455,6 +499,7 @@ if ($method === 'GET' && $path === '/reports') {
         'perPage' => $perPage,
         'totalPages' => $totalPages,
         'canViewReportSummary' => $canViewReportSummary,
+        'reportPanels' => ExaminationPanelCatalogRepository::all(),
     ]);
     exit;
 }
@@ -577,6 +622,110 @@ if (preg_match('#^/examinations/(\d+)/dl-dll/print$#', $path, $matches) === 1 &&
     }
 }
 
+if (preg_match('#^/examinations/(\d+)/(dl-dll|panel-print|preview)/pdf$#', $path, $matches) === 1 && $method === 'GET') {
+    Auth::requireLogin();
+    $id = (int) $matches[1];
+    $format = $matches[2] === 'preview' ? validDocumentType($_GET['type'] ?? null) : $matches[2];
+    $examination = ExaminationRepository::find($id);
+    if ($examination === false || $format === null) {
+        http_response_code(404);
+        View::render('errors/404', ['pageTitle' => 'Pemeriksaan atau jenis PDF tidak ditemukan']);
+        exit;
+    }
+    $panelForm = $examination['examination_type'] === 'mcu_general'
+        ? ExaminationPanelCatalogRepository::formForExamination($id)
+        : [];
+    foreach ($panelForm as &$panel) {
+        foreach ($panel['parameters'] as &$parameter) {
+            $legacyField = $parameter['legacy_field'];
+            if ($parameter['value'] === null && $legacyField !== null && isset($examination[$legacyField])) {
+                $parameter['value'] = (string) $examination[$legacyField];
+            }
+        }
+        unset($parameter);
+    }
+    unset($panel);
+    try {
+        ExaminationPdfExporter::download(
+            $examination,
+            FinalizationService::flags($id, $examination['status'] === 'finalized'),
+            $format,
+            $panelForm
+        );
+    } catch (ValidationException $exception) {
+        Flash::set('error', firstValidationError($exception));
+        Auth::redirect('/examinations/' . $id);
+    }
+}
+
+if (preg_match('#^/examinations/(\d+)/dl-dll/excel$#', $path, $matches) === 1 && $method === 'GET') {
+    Auth::requireLogin();
+    $id = (int) $matches[1];
+    $examination = ExaminationRepository::find($id);
+    if ($examination === false) {
+        http_response_code(404);
+        View::render('errors/404', ['pageTitle' => 'Pemeriksaan tidak ditemukan']);
+        exit;
+    }
+    $panelForm = ExaminationPanelCatalogRepository::formForExamination($id);
+    foreach ($panelForm as &$panel) {
+        foreach ($panel['parameters'] as &$parameter) {
+            $legacyField = $parameter['legacy_field'];
+            if ($parameter['value'] === null && $legacyField !== null && isset($examination[$legacyField])) {
+                $parameter['value'] = (string) $examination[$legacyField];
+            }
+        }
+        unset($parameter);
+    }
+    unset($panel);
+    $flags = FinalizationService::flags($id, $examination['status'] === 'finalized');
+    ExaminationExcelExporter::downloadDlDll($examination, $flags, $panelForm);
+}
+
+if (preg_match('#^/examinations/(\d+)/panel-print/excel$#', $path, $matches) === 1 && $method === 'GET') {
+    Auth::requireLogin();
+    $id = (int) $matches[1];
+    $examination = ExaminationRepository::find($id);
+    if ($examination === false) {
+        http_response_code(404);
+        View::render('errors/404', ['pageTitle' => 'Pemeriksaan tidak ditemukan']);
+        exit;
+    }
+    $panelForm = $examination['examination_type'] === 'mcu_general'
+        ? ExaminationPanelCatalogRepository::formForExamination($id)
+        : [];
+    foreach ($panelForm as &$panel) {
+        foreach ($panel['parameters'] as &$parameter) {
+            $legacyField = $parameter['legacy_field'];
+            if ($parameter['value'] === null && $legacyField !== null && isset($examination[$legacyField])) {
+                $parameter['value'] = (string) $examination[$legacyField];
+            }
+        }
+        unset($parameter);
+    }
+    unset($panel);
+    $flags = FinalizationService::flags($id, $examination['status'] === 'finalized');
+    ExaminationExcelExporter::downloadPanelPrint($examination, $flags, $panelForm);
+}
+
+if (preg_match('#^/examinations/(\d+)/preview/excel$#', $path, $matches) === 1 && $method === 'GET') {
+    Auth::requireLogin();
+    $id = (int) $matches[1];
+    $documentType = validDocumentType($_GET['type'] ?? null);
+    if ($documentType === null) {
+        Flash::set('error', 'Jenis dokumen tidak valid.');
+        Auth::redirect('/examinations/' . $id);
+    }
+    $examination = ExaminationRepository::find($id);
+    if ($examination === false) {
+        http_response_code(404);
+        View::render('errors/404', ['pageTitle' => 'Pemeriksaan tidak ditemukan']);
+        exit;
+    }
+    $flags = FinalizationService::flags($id, $examination['status'] === 'finalized');
+    ExaminationExcelExporter::downloadPreview($examination, $flags, $documentType);
+}
+
 if (preg_match('#^/examinations/(\d+)/print$#', $path, $matches) === 1 && $method === 'POST') {
     Auth::requireRole(['admin', 'perawat']);
     ensureCsrf();
@@ -644,9 +793,14 @@ function renderExamination(int $id, ?array $input = null, array $errors = []): n
         ? ExaminationPanelCatalogRepository::formForExamination($id)
         : [];
     $submittedPanelValues = is_array($input['parameter_values'] ?? null) ? $input['parameter_values'] : [];
+    $ageDays = ReferenceEvaluator::ageDays($examination['birth_date'] ?? null, $examination['examined_on'] ?? null);
+    $ageYears = ReferenceEvaluator::ageYears($examination['birth_date'] ?? null, $examination['examined_on'] ?? null);
+    $sex = in_array($examination['sex'] ?? null, ['L', 'P'], true) ? (string) $examination['sex'] : null;
+
     foreach ($panelForm as &$panel) {
         foreach ($panel['parameters'] as &$parameter) {
             $code = (string) $parameter['code'];
+            $parameter['placeholder'] = ReferenceEvaluator::placeholderForTestCode($code, $sex, $ageDays, $ageYears);
             if (array_key_exists($code, $submittedPanelValues) && !is_array($submittedPanelValues[$code])) {
                 $parameter['value'] = (string) $submittedPanelValues[$code];
                 continue;
